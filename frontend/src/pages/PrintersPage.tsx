@@ -8771,6 +8771,7 @@ export function PrintersPage() {
   const { resolvedMode, darkAccent, lightAccent } = useTheme();
   const activeAccent = resolvedMode === 'dark' ? darkAccent : lightAccent;
   const accentButtonClass = {
+    alveolab: 'bg-[#f5b817] text-neutral-900 hover:bg-[#fdcd00] border-[#fdcd00]/60',
     green: 'bg-green-500 text-white hover:bg-green-400 border-green-400/60',
     teal: 'bg-teal-500 text-white hover:bg-teal-400 border-teal-400/60',
     blue: 'bg-blue-500 text-white hover:bg-blue-400 border-blue-400/60',

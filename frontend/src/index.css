@@ -87,10 +87,10 @@ html {
 }
 
 :root {
-  /* Default accent color (green) */
-  --accent: #00ae42;
-  --accent-light: #00c64d;
-  --accent-dark: #009438;
+  /* Default accent color (ALVEOLAB honey yellow, from the brand logo) */
+  --accent: #f5b817;
+  --accent-light: #fdcd00;
+  --accent-dark: #d99a00;
 
   /* Semantic status colors - these never change with accent theme */
   --status-ok: #22c55e;      /* green-500 - always green for success/online/ok */
@@ -294,6 +294,21 @@ html {
 /* ============================================
    LAYER 3: ACCENT COLORS
    ============================================ */
+
+/* ALVEOLAB brand: honey yellow #f5b817 / #fdcd00 of the bee logo. */
+.accent-alveolab {
+  --accent: #f5b817;
+  --accent-light: #fdcd00;
+  --accent-dark: #d99a00;
+}
+
+/* White text on the yellow accent is unreadable (contrast ~1.9:1). Filled
+   accent surfaces get the brand black instead; outline/text uses of the
+   accent are unaffected. */
+.accent-alveolab :is(.bg-bambu-green, .bg-bambu-green-dark, .bg-bambu-green-light).text-white,
+.accent-alveolab :is(.bg-bambu-green, .bg-bambu-green-dark, .bg-bambu-green-light) > .text-white {
+  color: #111111;
+}
 
 .accent-green {
   --accent: #00ae42;

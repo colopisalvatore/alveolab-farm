@@ -56,6 +56,30 @@ Patch su file upstream (piccole, per merge facili): `models/printer.py` (+1 colo
 - Nome "ALVEOLAB Farm" in `index.html`, `manifest.json`, `config.app_name`, icone; **mantenere** licenza AGPL, copyright e attribuzione a Bambuddy (README, About, footer).
 - Documentazione utente.
 
+## Branding (anticipo di M7, 29/10/2026)
+
+- Colori dal logo ufficiale (`Pictures/Vettoriali/Alveolab.svg`): giallo miele `#f5b817` / `#fdcd00`, scuro `#d99a00`, nero brand. Nuovo accent `alveolab` (default chiaro e scuro, selezionabile in Impostazioni → Aspetto insieme ai colori originali). Sulle superfici gialle il testo bianco diventa nero (`index.css`, contrasto).
+- Logo ALVEOLAB (`frontend/public/img/alveolab_farm_logo.png`) in sidebar, header mobile, login e setup; favicon/icone PWA rigenerate dal logo; titolo e manifest "ALVEOLAB Farm".
+- **Non toccati (attribuzione AGPL/Bambuddy):** link GitHub Bambuddy in sidebar, overlay "powered by Bambuddy", LICENSE, README. I 106 testi i18n che citano "Bambuddy" restano per ora (M7).
+- `static/` (build committato da upstream) non viene ricommittato: l'immagine Docker ricompila il frontend.
+- Il banner "aggiornamento disponibile" segue ancora i rilasci upstream: **non** aggiornare il container con l'immagine `ghcr.io/maziggy/bambuddy` (perderebbe ELEGOO e branding); si aggiorna facendo merge di upstream nel fork e ricostruendo.
+
+## Deploy home lab (CT 100, 192.168.1.101)
+
+Compose: `deploy/alveolab-farm/docker-compose.yml`. Stesso nome container (`bambuddy`), rete host, porta 8100, **stessi volumi** (`bambuddy_bambuddy_data`, `bambuddy_bambuddy_logs`) → dati invariati; la sola migrazione DB è l'aggiunta di `printers.provider`.
+
+```bash
+# sul CT 100
+cd /opt/alveolab-farm                     # sorgente del branch (git archive dal PC)
+docker compose -f deploy/alveolab-farm/docker-compose.yml build
+docker tag ghcr.io/maziggy/bambuddy:latest bambuddy-rollback:pre-alveolab
+(cd /opt/bambuddy && docker compose down)                     # i volumi named restano
+docker run --rm -v bambuddy_bambuddy_data:/data -v /root/backup:/b alpine \
+  tar czf /b/bambuddy-data-pre-alveolab-$(date +%Y%m%d).tgz -C /data .
+docker compose -f deploy/alveolab-farm/docker-compose.yml up -d
+```
+Rollback: `docker compose -f deploy/alveolab-farm/docker-compose.yml down`, ripristino del tgz nel volume se serve, poi `cd /opt/bambuddy && docker compose up -d` (immagine originale taggata `bambuddy-rollback:pre-alveolab`). La colonna `provider` in più è ignorata da Bambuddy upstream.
+
 ## Sincronizzazione con upstream
 
 ```bash
