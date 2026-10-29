@@ -7974,6 +7974,9 @@ export default {
     elegooLanOff: 'LAN Only 模式已关闭：请在打印机触摸屏上开启，否则农场无法连接。',
     accessCodeOptional: '访问码（在 LAN Only 模式下于触摸屏设置）',
     canvas: 'CANVAS',
+    faultsTitle: '打印机报告的错误：',
+    faultsNone: '打印机未报告错误',
+    bulkSkipped: '已跳过其他品牌的打印机（仅监控）：{{count}}',
     connectError: {
       register_timeout: '打印机未响应：请在触摸屏上开启 LAN Only 模式。未添加打印机。',
       auth_failed: '打印机拒绝了访问码。未添加打印机。',

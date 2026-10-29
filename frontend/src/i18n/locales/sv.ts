@@ -8040,6 +8040,9 @@ errors: {
     elegooLanOff: 'LAN Only-läget är av: slå på det från skrivarens pekskärm, annars kan farmen inte ansluta.',
     accessCodeOptional: 'Åtkomstkod (inställd på pekskärmen i LAN Only-läge)',
     canvas: 'CANVAS',
+    faultsTitle: 'Fel som skrivaren rapporterat:',
+    faultsNone: 'Inga fel rapporterade av skrivaren',
+    bulkSkipped: 'Hoppade över skrivare av andra märken (endast övervakning): {{count}}',
     connectError: {
       register_timeout: 'Skrivaren svarade inte: slå på LAN Only-läget från pekskärmen. Skrivaren lades inte till.',
       auth_failed: 'Åtkomstkoden nekades av skrivaren. Skrivaren lades inte till.',

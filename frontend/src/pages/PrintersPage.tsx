@@ -200,8 +200,9 @@ import { MAX_CHAMBER_TEMP_C, getPrinterImage, getWifiStrength, filterCompatibleQ
 import { FilamentSlotCircle } from '../components/FilamentSlotCircle';
 // ALVEOLAB Farm: multi-provider card (Bambu unchanged, others by capability)
 import { usePrinterProvider } from '../components/printer-providers/usePrinterProvider';
-import { Capability } from '../components/printer-providers/capabilities';
+import { Capability, isBambuPrinter } from '../components/printer-providers/capabilities';
 import { CanvasPanel } from '../components/printer-providers/CanvasPanel';
+import { ProviderFaultsBadge } from '../components/printer-providers/ProviderFaultsBadge';
 import { ProviderPicker, ProviderReadOnlyNotice } from '../components/printer-providers/ProviderPicker';
 import { ElegooAddPrinterModal } from '../components/printer-providers/ElegooAddPrinterModal';
 import type { PrinterProviderId } from '../api/client';
@@ -4061,6 +4062,10 @@ function PrinterCard({
                   <Signal className="w-[var(--pc-i3,0.75rem)] h-[var(--pc-i3,0.75rem)]" />
                   {wifiSignal}dBm
                 </span>
+              )}
+              {/* ALVEOLAB Farm: faults reported by a non-Bambu printer */}
+              {status?.connected && !printerProvider.isBambu && (
+                <ProviderFaultsBadge faults={printerProvider.telemetry?.faults} />
               )}
               {/* HMS Status Indicator (Bambu HMS codes only) */}
               {status?.connected && printerProvider.isBambu && (() => {
@@ -9214,7 +9219,15 @@ export function PrintersPage() {
 
   const executeBulkAction = useCallback(async (action: 'stop' | 'pause' | 'resume' | 'clearPlate' | 'clearHMS') => {
     setBulkActionPending(true);
-    const ids = Array.from(selectedPrinterIds);
+    // ALVEOLAB Farm: every bulk action is a Bambu command (or a Bambu queue
+    // gate); printers of other providers are only monitored, so skip them.
+    const bambuIds = new Set((printers ?? []).filter(isBambuPrinter).map(p => p.id));
+    const allIds = Array.from(selectedPrinterIds);
+    const ids = allIds.filter(id => bambuIds.has(id));
+    const skippedOtherProviders = allIds.length - ids.length;
+    if (skippedOtherProviders > 0) {
+      showToast(t('farm.bulkSkipped', { count: skippedOtherProviders }), 'info');
+    }
 
     // Filter to only applicable printers based on cached state
     const applicableIds = ids.filter(id => {
@@ -9268,7 +9281,7 @@ export function PrintersPage() {
 
     setBulkActionPending(false);
     setBulkConfirmAction(null);
-  }, [selectedPrinterIds, queryClient, showToast, t]);
+  }, [selectedPrinterIds, printers, queryClient, showToast, t]);
 
   const handleBulkAction = useCallback((action: 'stop' | 'pause' | 'resume' | 'clearPlate' | 'clearHMS') => {
     // Actions that need confirmation

@@ -7990,6 +7990,9 @@ export default {
     elegooLanOff: 'LAN Onlyモードがオフです。プリンターのタッチスクリーンでオンにしてください。オフのままではファームに接続できません。',
     accessCodeOptional: 'アクセスコード（LAN Onlyモードでタッチスクリーンから設定）',
     canvas: 'CANVAS',
+    faultsTitle: 'プリンターが報告したエラー：',
+    faultsNone: 'プリンターからのエラー報告はありません',
+    bulkSkipped: 'スキップした他社製プリンター（監視のみ）：{{count}}',
     connectError: {
       register_timeout: 'プリンターが応答しませんでした。タッチスクリーンでLAN Onlyモードをオンにしてください。プリンターは追加されませんでした。',
       auth_failed: 'プリンターがアクセスコードを拒否しました。プリンターは追加されませんでした。',

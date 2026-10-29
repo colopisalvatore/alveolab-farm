@@ -7974,6 +7974,9 @@ export default {
     elegooLanOff: 'LAN Only 模式已關閉：請在印表機觸控螢幕上開啟，否則農場無法連線。',
     accessCodeOptional: '存取碼（在 LAN Only 模式下於觸控螢幕設定）',
     canvas: 'CANVAS',
+    faultsTitle: '印表機回報的錯誤：',
+    faultsNone: '印表機未回報錯誤',
+    bulkSkipped: '已略過其他品牌的印表機（僅監控）：{{count}}',
     connectError: {
       register_timeout: '印表機未回應：請在觸控螢幕上開啟 LAN Only 模式。未新增印表機。',
       auth_failed: '印表機拒絕了存取碼。未新增印表機。',

@@ -53,9 +53,11 @@ const idleStatus = {
 };
 
 const capabilitiesRequests: number[] = [];
+let telemetryFaults: Array<{ code: string; severity: string; message: string | null }> = [];
 
 beforeEach(() => {
   capabilitiesRequests.length = 0;
+  telemetryFaults = [];
   server.use(
     http.get('/api/v1/printers/', () => HttpResponse.json([bambu, elegoo])),
     http.get('/api/v1/printers/:id/status', () => HttpResponse.json(idleStatus)),
@@ -75,6 +77,7 @@ beforeEach(() => {
         connection: 'online',
         job_state: 'idle',
         firmware_version: '02.01.01.04',
+        faults: telemetryFaults,
         multicolor_slots: [0, 1, 2, 3].map((i) => ({
           unit_id: 0,
           slot_index: i,
@@ -136,6 +139,52 @@ describe('PrintersPage — ELEGOO card', () => {
     fireEvent.click(within(elegooCard).getByTitle(/more$/i));
     expect(within(elegooCard).getByText('Reconnect')).toBeInTheDocument();
     expect(within(elegooCard).queryByText('MQTT Debug')).toBeNull();
+  });
+});
+
+describe('PrintersPage — ELEGOO faults and bulk actions', () => {
+  it('shows the faults the printer reports, with their code', async () => {
+    telemetryFaults = [{ code: '109', severity: 'error', message: 'filament runout' }];
+    render(<PrintersPage />);
+    const { elegooCard, bambuCard } = await cards();
+
+    const badge = await within(elegooCard).findByTestId('provider-faults');
+    expect(badge).toHaveTextContent('1');
+    expect(badge.getAttribute('title')).toContain('109: filament runout');
+    expect(within(bambuCard).queryByTestId('provider-faults')).toBeNull();
+  });
+
+  it('shows OK when the printer reports no fault', async () => {
+    render(<PrintersPage />);
+    const { elegooCard } = await cards();
+    const badge = await within(elegooCard).findByTestId('provider-faults');
+    expect(badge).toHaveTextContent('OK');
+    expect(badge).toHaveAttribute('title', 'No errors reported by the printer');
+  });
+
+  it('never sends a bulk Bambu command to the ELEGOO printer', async () => {
+    const resumed: number[] = [];
+    server.use(
+      http.get('/api/v1/printers/:id/status', () => HttpResponse.json({ ...idleStatus, state: 'PAUSE' })),
+      http.post('/api/v1/printers/:id/print/resume', ({ params }) => {
+        resumed.push(Number(params.id));
+        return HttpResponse.json({ success: true, message: 'ok' });
+      }),
+    );
+    render(<PrintersPage />);
+    await cards();
+
+    fireEvent.click(screen.getByTitle('Select'));
+    fireEvent.click(await screen.findByText('Select All'));
+    await waitFor(() => expect(screen.getByText('2 selected')).toBeInTheDocument());
+    // The bulk toolbar's Resume, not the paused Bambu card's own button.
+    const toolbar = (await screen.findByText('2 selected')).closest('div.fixed') as HTMLElement;
+    const resume = within(toolbar).getByRole('button', { name: 'Resume' });
+    await waitFor(() => expect(resume).not.toBeDisabled());
+    fireEvent.click(resume);
+
+    await waitFor(() => expect(resumed).toEqual([1]));
+    expect(await screen.findByText('Skipped printers of other brands (monitoring only): 1')).toBeInTheDocument();
   });
 });
 

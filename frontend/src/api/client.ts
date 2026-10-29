@@ -470,6 +470,13 @@ export interface MultiColorSlot {
   active: boolean;
 }
 
+/** A fault as reported by the printer itself (code + the SDK's English description). */
+export interface PrinterFault {
+  code: string;
+  severity: 'error' | 'warning' | 'info';
+  message: string | null;
+}
+
 /** Provider-neutral telemetry snapshot (backend NormalizedTelemetry). */
 export interface PrinterTelemetry {
   provider: PrinterProviderId;
@@ -477,6 +484,7 @@ export interface PrinterTelemetry {
   job_state: string;
   firmware_version?: string | null;
   multicolor_slots?: MultiColorSlot[];
+  faults?: PrinterFault[];
 }
 
 export interface ElegooDiscoveredPrinter {

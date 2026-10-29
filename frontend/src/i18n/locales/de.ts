@@ -7991,6 +7991,9 @@ export default {
     elegooLanOff: 'Der LAN-Only-Modus ist aus: Schalten Sie ihn am Touchscreen des Druckers ein, sonst kann sich die Farm nicht verbinden.',
     accessCodeOptional: 'Zugangscode (am Touchscreen im LAN-Only-Modus festgelegt)',
     canvas: 'CANVAS',
+    faultsTitle: 'Vom Drucker gemeldete Fehler:',
+    faultsNone: 'Keine Fehler vom Drucker gemeldet',
+    bulkSkipped: 'Übersprungene Drucker anderer Marken (nur Überwachung): {{count}}',
     connectError: {
       register_timeout: 'Der Drucker hat nicht geantwortet: Schalten Sie den LAN-Only-Modus am Touchscreen ein. Der Drucker wurde nicht hinzugefügt.',
       auth_failed: 'Zugangscode vom Drucker abgelehnt. Der Drucker wurde nicht hinzugefügt.',

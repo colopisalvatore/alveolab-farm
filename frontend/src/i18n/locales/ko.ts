@@ -7610,6 +7610,9 @@ export default {
     elegooLanOff: 'LAN Only 모드가 꺼져 있습니다. 프린터 터치스크린에서 켜세요. 그렇지 않으면 팜이 연결할 수 없습니다.',
     accessCodeOptional: '액세스 코드 (LAN Only 모드에서 터치스크린으로 설정)',
     canvas: 'CANVAS',
+    faultsTitle: '프린터가 보고한 오류:',
+    faultsNone: '프린터가 보고한 오류가 없습니다',
+    bulkSkipped: '건너뛴 다른 브랜드 프린터(모니터링 전용): {{count}}',
     connectError: {
       register_timeout: '프린터가 응답하지 않았습니다. 터치스크린에서 LAN Only 모드를 켜세요. 프린터가 추가되지 않았습니다.',
       auth_failed: '프린터가 액세스 코드를 거부했습니다. 프린터가 추가되지 않았습니다.',

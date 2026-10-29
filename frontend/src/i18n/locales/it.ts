@@ -7976,6 +7976,9 @@ export default {
     elegooLanOff: 'La modalità LAN Only è spenta: attivala dal touchscreen della stampante, altrimenti la farm non può collegarsi.',
     accessCodeOptional: 'Codice di accesso (impostato dal touchscreen in modalità LAN Only)',
     canvas: 'CANVAS',
+    faultsTitle: 'Errori segnalati dalla stampante:',
+    faultsNone: 'Nessun errore segnalato dalla stampante',
+    bulkSkipped: 'Stampanti di altre marche saltate (solo monitoraggio): {{count}}',
     connectError: {
       register_timeout: 'La stampante non ha risposto: attiva la modalità LAN Only dal touchscreen. La stampante non è stata aggiunta.',
       auth_failed: 'Codice di accesso rifiutato dalla stampante. La stampante non è stata aggiunta.',

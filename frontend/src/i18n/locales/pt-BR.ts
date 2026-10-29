@@ -7976,6 +7976,9 @@ export default {
     elegooLanOff: 'O modo LAN Only está desligado: ative-o na tela sensível ao toque da impressora, senão a farm não consegue se conectar.',
     accessCodeOptional: 'Código de acesso (definido na tela sensível ao toque no modo LAN Only)',
     canvas: 'CANVAS',
+    faultsTitle: 'Erros informados pela impressora:',
+    faultsNone: 'Nenhum erro informado pela impressora',
+    bulkSkipped: 'Impressoras de outras marcas ignoradas (somente monitoramento): {{count}}',
     connectError: {
       register_timeout: 'A impressora não respondeu: ative o modo LAN Only na tela sensível ao toque. A impressora não foi adicionada.',
       auth_failed: 'Código de acesso recusado pela impressora. A impressora não foi adicionada.',

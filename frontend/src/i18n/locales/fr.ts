@@ -7977,6 +7977,9 @@ export default {
     elegooLanOff: 'Le mode LAN Only est désactivé : activez-le depuis l\'écran tactile de l\'imprimante, sinon la ferme ne peut pas se connecter.',
     accessCodeOptional: 'Code d\'accès (défini sur l\'écran tactile en mode LAN Only)',
     canvas: 'CANVAS',
+    faultsTitle: 'Erreurs signalées par l’imprimante :',
+    faultsNone: 'Aucune erreur signalée par l’imprimante',
+    bulkSkipped: 'Imprimantes d’autres marques ignorées (surveillance uniquement) : {{count}}',
     connectError: {
       register_timeout: 'L\'imprimante n\'a pas répondu : activez le mode LAN Only depuis son écran tactile. L\'imprimante n\'a pas été ajoutée.',
       auth_failed: 'Code d\'accès refusé par l\'imprimante. L\'imprimante n\'a pas été ajoutée.',

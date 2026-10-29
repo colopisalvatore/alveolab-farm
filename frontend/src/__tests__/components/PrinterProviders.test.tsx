@@ -8,6 +8,7 @@ import { screen } from '@testing-library/react';
 import { render } from '../utils';
 import { Capability, isBambuPrinter, providerAllows } from '../../components/printer-providers/capabilities';
 import { CanvasPanel } from '../../components/printer-providers/CanvasPanel';
+import { ProviderFaultsBadge } from '../../components/printer-providers/ProviderFaultsBadge';
 import type { MultiColorSlot, PrinterCapabilities } from '../../api/client';
 
 const elegooCaps: PrinterCapabilities = {
@@ -84,5 +85,29 @@ describe('CanvasPanel', () => {
   it('drops the "not verified" note when every loaded spool was detected', () => {
     render(<CanvasPanel slots={[slot(0, { loaded: true, material: 'PLA', source: 'detected' }), slot(1)]} />);
     expect(screen.queryByText('Colours and materials as set on the printer, not verified.')).toBeNull();
+  });
+});
+
+describe('ProviderFaultsBadge', () => {
+  it('shows nothing before the printer has reported anything', () => {
+    render(<ProviderFaultsBadge faults={undefined} />);
+    expect(screen.queryByTestId('provider-faults')).toBeNull();
+  });
+
+  it('counts the reported faults and lists them in the tooltip', () => {
+    render(
+      <ProviderFaultsBadge
+        faults={[
+          { code: '109', severity: 'error', message: 'filament runout' },
+          { code: 'emergency_stop', severity: 'error', message: null },
+        ]}
+      />,
+    );
+    const badge = screen.getByTestId('provider-faults');
+    expect(badge).toHaveTextContent('2');
+    expect(badge.className).toContain('status-error');
+    expect(badge.getAttribute('title')).toBe(
+      ['Errors reported by the printer:', '109: filament runout', 'emergency_stop'].join('\n'),
+    );
   });
 });

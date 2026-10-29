@@ -8042,6 +8042,9 @@ export default {
     elegooLanOff: 'LAN Only Mode is off: turn it on from the printer touchscreen, otherwise the farm cannot connect.',
     accessCodeOptional: 'Access code (set on the touchscreen in LAN Only Mode)',
     canvas: 'CANVAS',
+    faultsTitle: 'Errors reported by the printer:',
+    faultsNone: 'No errors reported by the printer',
+    bulkSkipped: 'Skipped printers of other brands (monitoring only): {{count}}',
     connectError: {
       register_timeout: 'The printer did not answer: turn on LAN Only Mode from its touchscreen. The printer was not added.',
       auth_failed: 'Access code rejected by the printer. The printer was not added.',

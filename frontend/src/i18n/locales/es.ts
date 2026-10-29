@@ -7999,6 +7999,9 @@ export default {
     elegooLanOff: 'El modo LAN Only está desactivado: actívalo desde la pantalla táctil de la impresora; si no, la granja no puede conectarse.',
     accessCodeOptional: 'Código de acceso (configurado en la pantalla táctil en modo LAN Only)',
     canvas: 'CANVAS',
+    faultsTitle: 'Errores informados por la impresora:',
+    faultsNone: 'La impresora no informa errores',
+    bulkSkipped: 'Impresoras de otras marcas omitidas (solo supervisión): {{count}}',
     connectError: {
       register_timeout: 'La impresora no respondió: activa el modo LAN Only desde su pantalla táctil. La impresora no se añadió.',
       auth_failed: 'La impresora rechazó el código de acceso. La impresora no se añadió.',

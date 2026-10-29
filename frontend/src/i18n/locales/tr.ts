@@ -7916,6 +7916,9 @@ export default {
     elegooLanOff: 'LAN Only modu kapalı: yazıcının dokunmatik ekranından açın, aksi halde çiftlik bağlanamaz.',
     accessCodeOptional: 'Erişim kodu (LAN Only modunda dokunmatik ekrandan ayarlanır)',
     canvas: 'CANVAS',
+    faultsTitle: 'Yazıcının bildirdiği hatalar:',
+    faultsNone: 'Yazıcı hata bildirmedi',
+    bulkSkipped: 'Atlanan diğer marka yazıcılar (yalnızca izleme): {{count}}',
     connectError: {
       register_timeout: 'Yazıcı yanıt vermedi: dokunmatik ekrandan LAN Only modunu açın. Yazıcı eklenmedi.',
       auth_failed: 'Erişim kodu yazıcı tarafından reddedildi. Yazıcı eklenmedi.',
