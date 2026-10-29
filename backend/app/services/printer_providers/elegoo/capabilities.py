@@ -16,7 +16,6 @@ _CC2_SUPPORTED = frozenset(
         Capability.AUTO_RECONNECT,
         Capability.STATUS,
         Capability.TEMPERATURES,
-        Capability.CHAMBER_TEMPERATURE,
         Capability.PRINT_PROGRESS,
         Capability.LAYER_PROGRESS,
         Capability.FAN_SPEEDS,
@@ -29,6 +28,10 @@ _CC2_SUPPORTED = frozenset(
 _CC2_NOTES = {
     Capability.FAN_SPEEDS: "read-only; 0-255 PWM scale assumed until verified on hardware (HW-M2-05)",
     Capability.MULTICOLOR_STATUS: "CANVAS trays as reported by the printer; detected vs declared not exposed by the protocol",
+    Capability.CHAMBER_TEMPERATURE: (
+        "not reported by our CC2 (firmware 02.01.01.04 sends no ztemperature_sensor); "
+        "read into telemetry if a firmware starts sending it"
+    ),
     Capability.PRINT_SPEED: "speed mode is read into the status, percentage is not reported",
     Capability.JOB_START: "planned for M4 (method 1020), needs hardware sign-off",
     Capability.JOB_PAUSE_RESUME: "planned for M4 (1021 pause; resume 1023 is disabled in the official SDK)",

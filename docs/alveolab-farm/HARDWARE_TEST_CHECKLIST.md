@@ -15,10 +15,10 @@ Legenda rischio: 🟢 sola lettura · 🟡 cambia stato non distruttivo · 🔴 
 
 | ID | Rischio | Test | Atteso | Esito |
 |---|---|---|---|---|
-| HW-M2-01 | 🟢 | `POST /api/v1/printer-providers/elegoo/discover` (broadcast, poi `targets:[IP]`) | La CC2 compare con `sn`, `machine_model`, `token_status`, `lan_status=1` | |
-| HW-M2-02 | 🟢 | Aggiungere la stampante (`provider: "elegoo"`, seriale da discovery, access code se `token_status=1`) | Probe ok, riga salvata, card in dashboard online | |
-| HW-M2-03 | 🟢 | Access code volutamente errato | Errore `printer_connection_failed`; client `auth_failed`; **nessun** tentativo ripetuto nei log | |
-| HW-M2-04 | 🟢 | Stampante idle: confrontare `GET …/telemetry` con il touchscreen | Temperature ugello/piano/camera coerenti (±2 °C); `job_state=idle` | |
+| HW-M2-01 | 🟢 | `POST /api/v1/printer-providers/elegoo/discover` (broadcast, poi `targets:[IP]`) | La CC2 compare con `sn`, `machine_model`, `token_status`, `lan_status=1` | ✅ 29/10 (autorizzato da Salvo): unicast → `sn`, `machine_model` "Centauri 2", `protocol_version` 1.0.0, `token_status` 1; `lan_status` 0 → 1 dopo LAN Only Mode. Broadcast dal PC Windows: 0 risposte (da riprovare dal CT 100). |
+| HW-M2-02 | 🟢 | Aggiungere la stampante (`provider: "elegoo"`, seriale da discovery, access code se `token_status=1`) | Probe ok, riga salvata, card in dashboard online | ⚠️ 29/10: con LAN Only spento → `register_timeout` (firmware non collegato al broker). Con LAN Only attivo: probe ok (`IDLE`, "Centauri 2"), registrazione ok. Aggiunta in farm da fare dopo il deploy della correzione. |
+| HW-M2-03 | 🟢 | Access code volutamente errato | Errore `printer_connection_failed`; client `auth_failed`; **nessun** tentativo ripetuto nei log || ✅ 29/10 (parziale): password errata → CONNACK 5 / 135 "Not authorized" (mappato su `auth_failed`). Assenza di retry da verificare col client completo. |
+| HW-M2-04 | 🟢 | Stampante idle: confrontare `GET …/telemetry` con il touchscreen | Temperature ugello/piano/camera coerenti (±2 °C); `job_state=idle` | ✅ 29/10 (parziale): idle → `job_state=idle`, ugello 39 °C, piano 21 °C, fw 02.01.01.04. **Nessun sensore camera** nei dati (capability tolta). Confronto con touchscreen da fare. |
 | HW-M2-05 | 🟢 | Durante una stampa avviata **dal touchscreen**: ventole | Scala ventole: confrontare % touchscreen con `fans_percent` (ipotesi 0-255 → %) | |
 | HW-M2-06 | 🟢 | Durante la stessa stampa | Nome file, %, layer corrente/totale, tempo residuo coerenti; `printing` | |
 | HW-M2-07 | 🟢 | Pausa/ripresa **dal touchscreen** | Transizioni `pausing → paused → resuming → printing` | |
@@ -27,7 +27,7 @@ Legenda rischio: 🟢 sola lettura · 🟡 cambia stato non distruttivo · 🔴 
 | HW-M2-10 | 🟢 | Riavvio ALVEOLAB Farm con CC2 accesa | Riconnessione senza errore `too many clients` (client id stabile) | |
 | HW-M2-11 | 🟢 | Farm + ElegooSlicer + app ELEGOO connessi insieme | Annotare quanti client accetta; comportamento con `too many clients` | |
 | HW-M2-12 | 🟢 | Provocare un errore (es. filamento esaurito, se sicuro) | Fault riportato con codice (109) | |
-| HW-M2-13 | 🟢 | Continuità push 6000: log diagnostico | Gli `id` dei push sono consecutivi? (SDK) o serve `result.sequence`? | |
+| HW-M2-13 | 🟢 | Continuità push 6000: log diagnostico | Gli `id` dei push sono consecutivi? (SDK) o serve `result.sequence`? | ✅ 29/10: push 6000 con `id` dell'envelope consecutivi (10, 11, 12…), nessun refresh necessario. |
 
 ## M4 — Controllo lavori e upload (richiede autorizzazione per ogni voce)
 

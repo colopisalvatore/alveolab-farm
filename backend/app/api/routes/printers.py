@@ -190,17 +190,19 @@ async def create_printer(
     if not test_result.get("success"):
         # The frontend renders the user-facing message via i18n on `code`;
         # `message` is an English fallback for non-UI clients (curl / scripts).
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "printer_connection_failed",
-                "message": (
-                    "Could not connect to the printer. Verify IP address, serial number, "
-                    "and access code, and confirm LAN-only mode is enabled. "
-                    "The printer was not added."
-                ),
-            },
-        )
+        detail = {
+            "code": "printer_connection_failed",
+            "message": (
+                "Could not connect to the printer. Verify IP address, serial number, "
+                "and access code, and confirm LAN-only mode is enabled. "
+                "The printer was not added."
+            ),
+        }
+        if test_result.get("reason"):
+            # ALVEOLAB Farm: ELEGOO probe tells auth_failed / register_timeout
+            # (LAN Only Mode off) / too_many_clients / unreachable apart.
+            detail["reason"] = test_result["reason"]
+        raise HTTPException(status_code=400, detail=detail)
 
     printer = Printer(**printer_data.model_dump())
     db.add(printer)

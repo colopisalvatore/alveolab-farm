@@ -126,11 +126,23 @@ SDK: nessuno stream LAN (1042 commentato). [community] MJPEG `http://<ip>:8080/?
 
 ## 10. Punti aperti (verifica su hardware: `HARDWARE_TEST_CHECKLIST.md`)
 
-1. Firmware effettivo della nostra macchina e risposta a discovery.
+**Osservato sulla nostra macchina (29/10/2026, sola lettura):**
+- Discovery: `machine_model` e `host_name` = "Centauri 2" (non "Centauri Carbon 2"), `protocol_version` "1.0.0", `token_status` 1, `lan_status` 0. Broadcast dal PC Windows senza risposta, unicast sì.
+- Broker: mosquitto 2.0.22 su 1883, sottoscrizione `#` concessa, `$SYS` visibile.
+- `token_status` 1 **non** significa codice personalizzato: con il codice di fabbrica `123456` CONNACK 0; password errata → CONNACK 5 (v3.1.1) / 135.
+- Con `lan_status` 0 il firmware **non è collegato al proprio broker** (`$SYS/broker/subscriptions/count` 0, `clients/maximum` 1 da ore): `api_register` resta senza risposta. Conferma il dato community: serve LAN Only Mode.
+- Con LAN Only Mode attivo (access code personalizzato, nel vault come `ELEGOO_CC2_ACCESS_CODE`): registrazione in ~50 ms; ri-registrazione con lo stesso client id → `"error": "already registered"` (accettata: il client id stabile funziona). PING/PONG ogni 10 s.
+- Firmware `ota_version` **02.01.01.04**, `mcu_version` 00.00.00.00. Idle = `status` 1 / `sub_status` 2802.
+- 1002: **nessun `ztemperature_sensor`** (niente temperatura camera: capability tolta); `external_device` elenca accessori con `configured` 0; ventole come float 0-255 (`controller_fan` 255.0 a riposo).
+- CANVAS: `tray_id` **0-based** (0-3); slot senza dati filamento con `status` 1 e campi vuoti, slot vuoti `status` 0.
+- Push 6000: `id` dell'envelope consecutivi, delta piccoli (una temperatura per messaggio, ~1/s quando cambia).
+- Messaggi salvati come fixture `REAL_*` in `backend/tests/_fixtures/elegoo_cc2.py`.
+
+1. ~~Firmware effettivo della nostra macchina~~ → 02.01.01.04.
 2. Ripresa 1023 (disabilitata nell'SDK).
-3. Numerazione `tray_id` e significato `status` 1/2.
+3. ~~Numerazione `tray_id`~~ → 0-based. Resta il significato di `status` 1/2.
 4. Chiave `slot_map`: `t` (SDK) vs `slot` (doc community).
 5. Scala ventole in lettura: 0-255 (osservato) vs percentuale (struct SDK). Implementazione attuale: 0-255.
-6. Continuità push: `id` dell'envelope (SDK) vs `result.sequence` (community).
+6. ~~Continuità push~~ → `id` dell'envelope consecutivo, come nell'SDK.
 7. Upload senza `X-Token` su firmware stock; limiti di dimensione.
 8. Numero massimo di client MQTT (slicer + app + farm contemporanei).

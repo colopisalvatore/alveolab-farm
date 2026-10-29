@@ -643,6 +643,48 @@ class TestClient:
             assert caps.notes[missing]
 
 
+class TestRealHardwareCapture:
+    """Messages captured on our own Centauri 2 (fw 02.01.01.04), see fixtures."""
+
+    def test_discovery(self):
+        result = p.parse_discovery_response(json.dumps(fx.REAL_DISCOVERY_RESPONSE), fx.PRINTER_IP)
+        assert result.model == "Centauri 2"
+        assert result.access_code_required is True
+        assert result.lan_only is True
+        assert is_cc2_model(result.model)
+
+    def test_idle_status(self):
+        t = normalize_cc2_status(
+            fx.REAL_FULL_STATUS_IDLE["result"],
+            attributes=fx.REAL_ATTRIBUTES_RESPONSE["result"],
+            canvas_info=fx.REAL_CANVAS_STATUS_RESPONSE["result"]["canvas_info"],
+            connection=ConnectionStatus.ONLINE,
+            model="Centauri 2",
+        )
+        assert t.job_state is JobState.IDLE
+        assert (t.nozzle.current, t.bed.current) == (39.0, 21.0)
+        assert t.chamber.current is None  # no ztemperature_sensor on this firmware
+        assert t.fans_percent["controller"] == 100  # 255.0 PWM
+        assert t.firmware_version == "02.01.01.04"
+        assert t.faults == []
+        assert [s.slot_index for s in t.multicolor_slots] == [0, 1, 2, 3]
+        assert [s.loaded for s in t.multicolor_slots] == [True, False, False, False]
+        assert all(s.material is None and s.color_hex is None for s in t.multicolor_slots)
+
+    def test_chamber_not_advertised(self):
+        caps = capabilities_for("elegoo", "Centauri 2")
+        assert not caps.supports(Capability.CHAMBER_TEMPERATURE)
+        assert caps.notes[Capability.CHAMBER_TEMPERATURE]
+
+    def test_consecutive_push_ids_need_no_refresh(self):
+        cache = p.CC2StatusCache()
+        cache.apply_full(fx.REAL_FULL_STATUS_IDLE["result"])
+        for push in fx.REAL_DELTA_PUSHES:
+            merged, needs_refresh = cache.apply_delta(push["id"], push["result"])
+            assert merged is not None and not needs_refresh
+        assert cache.status["heater_bed"]["temperature"] == 20
+
+
 class TestCapabilityModels:
     def test_cc2_model_detection(self):
         assert is_cc2_model("Centauri Carbon 2")
@@ -686,3 +728,18 @@ async def test_probe_connection_timeout_reports_unreachable():
     )
     assert result["success"] is False
     assert result["reason"] == "unreachable"
+
+
+@pytest.mark.asyncio
+async def test_probe_connection_reports_register_timeout(monkeypatch):
+    """Real CC2 with LAN Only Mode off: CONNACK ok, api_register never answered."""
+    monkeypatch.setattr(ElegooCC2Client, "REGISTER_TIMEOUT", 0.1)
+
+    def factory(client_id):
+        fake = FakeMQTT(client_id)
+        fake.connect_async = lambda host, port, keepalive: fake.on_connect(fake, None, None, SimpleNamespace(value=0))
+        return fake
+
+    result = await probe_connection(fx.PRINTER_IP, fx.SERIAL, None, timeout=2.0, mqtt_client_factory=factory)
+    assert result["success"] is False
+    assert result["reason"] == "register_timeout"

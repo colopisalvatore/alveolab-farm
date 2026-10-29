@@ -493,6 +493,14 @@ async def probe_connection(
                 break
             if client.last_connect_error in (CONNECT_ERROR_TOO_MANY_CLIENTS, CONNECT_ERROR_REGISTER):
                 break
+            # The heartbeat thread is off here, so check the registration
+            # timeout ourselves. Seen on a real CC2 with LAN Only Mode off: the
+            # broker accepts CONNECT but the firmware never answers api_register.
+            with client._lock:
+                register_sent_at = client._register_sent_at
+            if register_sent_at is not None and client._clock() - register_sent_at > client.REGISTER_TIMEOUT:
+                client.last_connect_error = CONNECT_ERROR_REGISTER_TIMEOUT
+                break
             await asyncio.sleep(0.2)
         attributes = client._attributes
         return {

@@ -168,3 +168,150 @@ CANVAS_STATUS_RESPONSE = {
 # CC2_PROTOCOL.md:495-518 — registration exchange.
 REGISTER_OK = {"error": "ok"}
 REGISTER_TOO_MANY = {"error": "too many clients"}
+
+
+# --- Captured on our own Centauri 2 (29/10/2026, read-only session) ---------
+# Firmware ota 02.01.01.04, LAN Only Mode on, printer idle, CANVAS connected
+# with no filament info set. Serial and IP replaced by the placeholders above;
+# request ids kept as sent by ElegooCC2Client. Notable vs the community notes:
+# model "Centauri 2", no ztemperature_sensor (no chamber reading), tray_id
+# 0-based, push ids consecutive.
+REAL_DISCOVERY_RESPONSE = {
+    "id": 0,
+    "result": {
+        "host_name": "Centauri  2",
+        "lan_status": 1,
+        "machine_model": "Centauri 2",
+        "protocol_version": "1.0.0",
+        "sn": SERIAL,
+        "token_status": 1,
+    },
+}
+
+REAL_FULL_STATUS_IDLE = {
+    "id": 100000,
+    "method": 1002,
+    "result": {
+        "error_code": 0,
+        "external_device": {
+            "auxiliary_fan": {"configured": 0},
+            "camera": False,
+            "chassis_camera": {"configured": 0},
+            "chassis_fan": {"configured": 0},
+            "chassis_lighting": {"configured": 0},
+            "exhaust_grille": {"configured": 0},
+            "type": "0303",
+            "u_disk": False,
+        },
+        "extruder": {"filament_detect_enable": 1, "filament_detected": 0, "target": 0, "temperature": 39},
+        "fans": {"controller_fan": {"speed": 255.0}, "fan": {"speed": 0.0}, "heater_fan": {"speed": 0.0}},
+        "gcode_move": {"extruder": 0.0, "speed": 1500, "speed_mode": 1, "x": 52.5, "y": 264.0, "z": 5.420099671875},
+        "heater_bed": {"target": 0, "temperature": 21},
+        "machine_status": {
+            "exception_status": [],
+            "progress": 0,
+            "status": 1,
+            "sub_status": 2802,
+            "sub_status_reason_code": 0,
+        },
+        "print_status": {
+            "bed_mesh_detect": False,
+            "current_layer": 0,
+            "enable": False,
+            "filament_detect": False,
+            "filename": "",
+            "print_duration": 0,
+            "remaining_time_sec": 0,
+            "state": "",
+            "total_duration": 0,
+            "uuid": "",
+        },
+        "tool_head": {"homed_axes": "xyz"},
+    },
+}
+
+REAL_ATTRIBUTES_RESPONSE = {
+    "id": 100001,
+    "method": 1001,
+    "result": {
+        "error_code": 0,
+        "hardware_version": "",
+        "hostname": "Centauri  2",
+        "ip": PRINTER_IP,
+        "machine_model": "Centauri 2",
+        "protocol_version": "1.0.0",
+        "sn": SERIAL,
+        "software_version": {"mcu_version": "00.00.00.00", "ota_version": "02.01.01.04", "soc_version": ""},
+    },
+}
+
+REAL_CANVAS_STATUS_RESPONSE = {
+    "id": 100002,
+    "method": 2005,
+    "result": {
+        "canvas_info": {
+            "active_canvas_id": 0,
+            "active_tray_id": -1,
+            "auto_refill": False,
+            "canvas_list": [
+                {
+                    "canvas_id": 0,
+                    "connected": 1,
+                    "tray_list": [
+                        {
+                            "brand": "",
+                            "filament_code": "",
+                            "filament_color": "",
+                            "filament_name": "",
+                            "filament_type": "",
+                            "max_nozzle_temp": 0,
+                            "min_nozzle_temp": 0,
+                            "status": 1,
+                            "tray_id": 0,
+                        },
+                        {
+                            "brand": "",
+                            "filament_code": "",
+                            "filament_color": "",
+                            "filament_name": "",
+                            "filament_type": "",
+                            "max_nozzle_temp": 0,
+                            "min_nozzle_temp": 0,
+                            "status": 0,
+                            "tray_id": 1,
+                        },
+                        {
+                            "brand": "",
+                            "filament_code": "",
+                            "filament_color": "",
+                            "filament_name": "",
+                            "filament_type": "",
+                            "max_nozzle_temp": 0,
+                            "min_nozzle_temp": 0,
+                            "status": 0,
+                            "tray_id": 2,
+                        },
+                        {
+                            "brand": "",
+                            "filament_code": "",
+                            "filament_color": "",
+                            "filament_name": "",
+                            "filament_type": "",
+                            "max_nozzle_temp": 0,
+                            "min_nozzle_temp": 0,
+                            "status": 0,
+                            "tray_id": 3,
+                        },
+                    ],
+                }
+            ],
+        },
+        "error_code": 0,
+    },
+}
+
+REAL_DELTA_PUSHES = [
+    {"id": 10, "method": 6000, "result": {"extruder": {"temperature": 40}}},
+    {"id": 11, "method": 6000, "result": {"extruder": {"temperature": 39}}},
+    {"id": 12, "method": 6000, "result": {"heater_bed": {"temperature": 20}}},
+]
