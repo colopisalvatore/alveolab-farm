@@ -15,6 +15,12 @@ from backend.app.services.bambu_mqtt import (
     PrinterState,
     get_stage_name,
 )
+from backend.app.services.printer_providers.base import (
+    CapabilitySet,
+    PrinterProvider,
+    PrinterProviderClient,
+    parse_provider,
+)
 from backend.app.utils.ams_humidity import ams_humidity_percent
 from backend.app.utils.kprofile_lookup import build_slot_k_resolver
 
@@ -386,6 +392,13 @@ class PrinterManager:
 
     def __init__(self):
         self._clients: dict[int, BambuMQTTClient] = {}
+        # Non-Bambu printers (ALVEOLAB Farm provider layer). Kept apart from
+        # ``_clients`` on purpose: ~70 call sites take ``get_client()`` to mean
+        # "the BambuMQTTClient" and send it Bambu commands, so a provider client
+        # must never come back from there. Status readers go through
+        # get_status() / get_all_statuses(), which see both maps.
+        self._provider_clients: dict[int, PrinterProviderClient] = {}
+        self._providers: dict[int, PrinterProvider] = {}
         self._models: dict[int, str | None] = {}  # Cache printer models for feature detection
         self._printer_info: dict[int, PrinterInfo] = {}  # Cache printer name/serial for callbacks
         # Last AMS / external-spool reading of a printer whose client has been
@@ -741,8 +754,12 @@ class PrinterManager:
 
     async def connect_printer(self, printer: Printer) -> bool:
         """Connect to a printer."""
-        if printer.id in self._clients:
+        if printer.id in self._clients or printer.id in self._provider_clients:
             self.disconnect_printer(printer.id)
+
+        provider = parse_provider(getattr(printer, "provider", None))
+        if provider is not PrinterProvider.BAMBU:
+            return await self._connect_provider_printer(printer, provider)
 
         printer_id = printer.id
 
@@ -822,8 +839,35 @@ class PrinterManager:
         self._clients[printer_id] = client
         self._models[printer_id] = printer.model  # Cache model for feature detection
         self._printer_info[printer_id] = PrinterInfo(printer.name, printer.serial_number)
+        self._providers[printer_id] = PrinterProvider.BAMBU
 
         # Wait a moment for connection
+        await asyncio.sleep(1)
+        return client.state.connected
+
+    async def _connect_provider_printer(self, printer: Printer, provider: PrinterProvider) -> bool:
+        """Connect a non-Bambu printer through the provider layer.
+
+        Only the status-change callback is wired: print start/complete events
+        feed the archive and queue pipelines, which are still Bambu-only (they
+        fetch the 3MF over FTPS). Those are connected per provider once its job
+        handling exists — see docs/alveolab-farm/IMPLEMENTATION_PLAN.md (M4).
+        """
+        from backend.app.services.printer_providers import create_provider_client
+
+        printer_id = printer.id
+
+        def on_state_change(state: PrinterState):
+            if self._on_status_change:
+                self._schedule_async(self._on_status_change(printer_id, state))
+
+        client = create_provider_client(provider, printer, on_state_change=on_state_change)
+        client.connect()
+        self._provider_clients[printer_id] = client
+        self._providers[printer_id] = provider
+        self._models[printer_id] = printer.model
+        self._printer_info[printer_id] = PrinterInfo(printer.name, printer.serial_number)
+
         await asyncio.sleep(1)
         return client.state.connected
 
@@ -833,13 +877,41 @@ class PrinterManager:
             self._remember_trays(printer_id)
             self._clients[printer_id].disconnect(timeout=timeout)
             del self._clients[printer_id]
+        provider_client = self._provider_clients.pop(printer_id, None)
+        if provider_client is not None:
+            provider_client.disconnect(timeout=timeout)
+        self._providers.pop(printer_id, None)
         self._models.pop(printer_id, None)  # Clean up model cache
         self._printer_info.pop(printer_id, None)  # Clean up printer info cache
 
     def disconnect_all(self, timeout: float = 0):
         """Disconnect from all printers."""
-        for printer_id in list(self._clients.keys()):
+        for printer_id in list(self._clients.keys()) + list(self._provider_clients.keys()):
             self.disconnect_printer(printer_id, timeout=timeout)
+
+    def get_provider(self, printer_id: int) -> PrinterProvider | None:
+        """Provider of a connected printer; None when it is not connected.
+
+        Callers holding the DB row should use ``parse_provider(printer.provider)``
+        instead — that answers for disconnected printers too.
+        """
+        return self._providers.get(printer_id)
+
+    def get_provider_client(self, printer_id: int) -> PrinterProviderClient | None:
+        """The non-Bambu client of a printer, or None (Bambu or not connected)."""
+        return self._provider_clients.get(printer_id)
+
+    def get_capabilities(self, printer_id: int) -> CapabilitySet | None:
+        """Capability set of a connected printer; None when it is not connected."""
+        from backend.app.services.printer_providers import capabilities_for
+
+        provider = self._providers.get(printer_id)
+        if provider is None:
+            return None
+        client = self._provider_clients.get(printer_id)
+        if client is not None:
+            return client.capabilities
+        return capabilities_for(provider, self._models.get(printer_id))
 
     def get_status(self, printer_id: int) -> PrinterState | None:
         """Get the current status of a printer (checks for stale connections)."""
@@ -848,6 +920,10 @@ class PrinterManager:
             # Check staleness and update connected state if needed
             client.check_staleness()
             return client.state
+        provider_client = self._provider_clients.get(printer_id)
+        if provider_client is not None:
+            provider_client.check_staleness()
+            return provider_client.state
         return None
 
     # Gcode states in which a job is loaded / in progress and cutting power
@@ -891,6 +967,9 @@ class PrinterManager:
             # Check staleness and update connected state if needed
             client.check_staleness()
             result[printer_id] = client.state
+        for printer_id, provider_client in self._provider_clients.items():
+            provider_client.check_staleness()
+            result[printer_id] = provider_client.state
         return result
 
     def is_connected(self, printer_id: int) -> bool:
@@ -899,10 +978,17 @@ class PrinterManager:
             client = self._clients[printer_id]
             # Check staleness and update connected state if needed
             return client.check_staleness()
+        provider_client = self._provider_clients.get(printer_id)
+        if provider_client is not None:
+            return provider_client.check_staleness()
         return False
 
     def get_client(self, printer_id: int) -> BambuMQTTClient | None:
-        """Get the MQTT client for a printer."""
+        """Get the Bambu MQTT client for a printer.
+
+        Always None for a non-Bambu printer, by design: callers use the result
+        to send Bambu MQTT commands. See ``get_provider_client``.
+        """
         return self._clients.get(printer_id)
 
     def mark_printer_offline(self, printer_id: int):

@@ -3514,6 +3514,10 @@ async def run_migrations(conn):
     # Migration: Add awaiting_plate_clear column to printers (#961)
     await _safe_execute(conn, "ALTER TABLE printers ADD COLUMN awaiting_plate_clear BOOLEAN DEFAULT FALSE NOT NULL")
 
+    # Migration (ALVEOLAB Farm): printer protocol family. Existing rows are all
+    # Bambu printers, which the DEFAULT backfills on both SQLite and PostgreSQL.
+    await _safe_execute(conn, "ALTER TABLE printers ADD COLUMN provider VARCHAR(20) DEFAULT 'bambu' NOT NULL")
+
     # Migration: Add REST/Webhook smart plug fields
     await _safe_execute(conn, "ALTER TABLE smart_plugs ADD COLUMN rest_on_url VARCHAR(500)")
     await _safe_execute(conn, "ALTER TABLE smart_plugs ADD COLUMN rest_on_body TEXT")

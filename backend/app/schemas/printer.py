@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -9,10 +10,21 @@ class PrinterBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     serial_number: str = Field(..., min_length=1, max_length=50)
 
+    # Protocol family (ALVEOLAB Farm). Declared before the validators below
+    # read it; defaults to Bambu so every existing client keeps working.
+    provider: Literal["bambu", "elegoo"] = "bambu"
+
     @field_validator("serial_number")
     @classmethod
-    def _normalize_serial_number(cls, v: str) -> str:
-        """Uppercase and trim the serial number.
+    def _strip_serial_number(cls, v: str) -> str:
+        normalized = v.strip()
+        if not normalized:
+            raise ValueError("serial_number must not be blank")
+        return normalized
+
+    @model_validator(mode="after")
+    def _normalize_serial_number(self):
+        """Uppercase the serial number of a Bambu printer.
 
         Bambu serial numbers are uppercase alphanumeric, and the MQTT report
         topic ``device/<serial>/report`` is case-sensitive. A serial entered
@@ -20,11 +32,14 @@ class PrinterBase(BaseModel):
         without error but never receives a message — the printer publishes to
         the correctly-cased topic, so every status field stays unknown (#1465).
         Normalising on input makes the subscribed topic always match.
+
+        Other providers keep the serial exactly as the printer reports it: the
+        ELEGOO CC2 topics are ``elegoo/<sn>/...`` with the serial from discovery,
+        and nothing says that is always upper-case.
         """
-        normalized = v.strip().upper()
-        if not normalized:
-            raise ValueError("serial_number must not be blank")
-        return normalized
+        if self.provider == "bambu":
+            self.serial_number = self.serial_number.upper()
+        return self
 
     ip_address: str = Field(
         ...,
@@ -45,7 +60,15 @@ class PrinterCreate(PrinterBase):
     # access_code lives on the input shapes only — never on the default
     # PrinterResponse. Direct exposure on PRINTERS_READ would let a Viewer
     # connect to the printer's MQTT and bypass Bambuddy's RBAC.
-    access_code: str = Field(..., min_length=1, max_length=20)
+    # Required for Bambu; optional for an ELEGOO CC2, which only asks for one
+    # when an access code is set on the printer (discovery token_status == 1).
+    access_code: str = Field("", max_length=20)
+
+    @model_validator(mode="after")
+    def _require_bambu_access_code(self):
+        if self.provider == "bambu" and not self.access_code:
+            raise ValueError("access_code is required for Bambu Lab printers")
+        return self
 
 
 class PlateDetectionROI(BaseModel):
@@ -111,6 +134,7 @@ class PrinterResponse(PrinterBase):
             "serial_number": printer.serial_number,
             "ip_address": printer.ip_address,
             "model": printer.model,
+            "provider": printer.provider or "bambu",
             "location": printer.location,
             "auto_archive": printer.auto_archive,
             "external_camera_url": printer.external_camera_url,

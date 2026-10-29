@@ -172,11 +172,21 @@ async def create_printer(
     if result.scalar_one_or_none():
         raise HTTPException(400, "Printer with this serial number already exists")
 
-    test_result = await printer_manager.test_connection(
-        ip_address=printer_data.ip_address,
-        serial_number=printer_data.serial_number,
-        access_code=printer_data.access_code,
-    )
+    if printer_data.provider == "elegoo":
+        # ALVEOLAB Farm: CC2 probe = MQTT connect + registration + read-only queries.
+        from backend.app.services.printer_providers.elegoo.client import probe_connection
+
+        test_result = await probe_connection(
+            printer_data.ip_address,
+            printer_data.serial_number,
+            printer_data.access_code or None,
+        )
+    else:
+        test_result = await printer_manager.test_connection(
+            ip_address=printer_data.ip_address,
+            serial_number=printer_data.serial_number,
+            access_code=printer_data.access_code,
+        )
     if not test_result.get("success"):
         # The frontend renders the user-facing message via i18n on `code`;
         # `message` is an English fallback for non-UI clients (curl / scripts).

@@ -60,6 +60,7 @@ from backend.app.services.printer_manager import (
     supports_drying,
     supports_drying_while_printing,
 )
+from backend.app.services.printer_providers.base import Capability
 from backend.app.services.smart_plug_manager import smart_plug_manager
 from backend.app.services.spool_assignment_notifications import (
     _global_tray_from_assignment,
@@ -1886,6 +1887,15 @@ class PrintScheduler:
                                 f"Offline, no Auto On smart plug: {printer_label(item.printer_id)}",
                             )
                             continue
+
+                    if self._cannot_take_queue_jobs(item.printer_id):
+                        await hold_for_printer(
+                            item,
+                            item.printer_id,
+                            "provider does not support queue dispatch",
+                            f"Not supported: {printer_label(item.printer_id)} cannot take queue jobs yet",
+                        )
+                        continue
 
                     # Check if printer is idle (busy with another print)
                     if not printer_idle:
@@ -4253,10 +4263,26 @@ class PrintScheduler:
 
         return True
 
+    @staticmethod
+    def _cannot_take_queue_jobs(printer_id: int) -> bool:
+        """True for a connected printer whose provider has no queue dispatch (ALVEOLAB Farm).
+
+        The dispatch path below uploads over FTPS and starts with a Bambu
+        ``project_file`` command; handing it a non-Bambu printer would fail deep
+        in the upload at best. Unknown capabilities (not connected) answer False
+        and are left to the connection checks.
+        """
+        capabilities = printer_manager.get_capabilities(printer_id)
+        return capabilities is not None and not capabilities.supports(Capability.QUEUE_DISPATCH)
+
     def _is_printer_idle(self, printer_id: int, require_plate_clear: bool = True) -> bool:
         """Check if a printer is connected and idle."""
         if not printer_manager.is_connected(printer_id):
             logger.debug("Printer %d: not connected", printer_id)
+            return False
+
+        if self._cannot_take_queue_jobs(printer_id):
+            logger.debug("Printer %d: provider does not support queue dispatch", printer_id)
             return False
 
         state = printer_manager.get_status(printer_id)
