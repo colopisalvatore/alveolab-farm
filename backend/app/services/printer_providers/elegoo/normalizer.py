@@ -106,6 +106,7 @@ def job_state_from_machine_status(status: int | None, sub_status: int | None) ->
             or sub_status in p.PRINT_SUB_BED_PREHEATING
             or sub_status in p.PRINT_SUB_HOMING
             or sub_status in p.PRINT_SUB_AUTO_LEVELING
+            or sub_status in p.PRINT_SUB_OBSERVED_PREPARING
         ):
             return JobState.PREPARING
         if sub_status == p.PRINT_SUB_PAUSING:

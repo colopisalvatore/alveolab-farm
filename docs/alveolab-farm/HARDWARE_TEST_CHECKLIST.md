@@ -19,13 +19,13 @@ Legenda rischio: 🟢 sola lettura · 🟡 cambia stato non distruttivo · 🔴 
 | HW-M2-02 | 🟢 | Aggiungere la stampante (`provider: "elegoo"`, seriale da discovery, access code se `token_status=1`) | Probe ok, riga salvata, card in dashboard online | ✅ 29/10: con LAN Only spento → `register_timeout` (firmware non collegato al broker). Con LAN Only attivo: aggiunta in farm sul CT 100 come stampante 5, card online (Idle, temperature, fw). Prova 10 min idle dal PC: 59 PING/59 PONG, 82 push senza buchi, nessuna riconnessione. |
 | HW-M2-03 | 🟢 | Access code volutamente errato | Errore `printer_connection_failed`; client `auth_failed`; **nessun** tentativo ripetuto nei log || ✅ 29/10 (parziale): password errata → CONNACK 5 / 135 "Not authorized" (mappato su `auth_failed`). Assenza di retry da verificare col client completo. |
 | HW-M2-04 | 🟢 | Stampante idle: confrontare `GET …/telemetry` con il touchscreen | Temperature ugello/piano/camera coerenti (±2 °C); `job_state=idle` | ✅ 29/10 (parziale): idle → `job_state=idle`, ugello 39 °C, piano 21 °C, fw 02.01.01.04. **Nessun sensore camera** nei dati (capability tolta). Confronto con touchscreen da fare. |
-| HW-M2-05 | 🟢 | Durante una stampa avviata **dal touchscreen**: ventole | Scala ventole: confrontare % touchscreen con `fans_percent` (ipotesi 0-255 → %) | |
-| HW-M2-06 | 🟢 | Durante la stessa stampa | Nome file, %, layer corrente/totale, tempo residuo coerenti; `printing` | |
-| HW-M2-07 | 🟢 | Pausa/ripresa **dal touchscreen** | Transizioni `pausing → paused → resuming → printing` | |
-| HW-M2-08 | 🟢 | Fine stampa | `finished` (sub 2077), poi `idle` | |
+| HW-M2-05 | 🟢 | Durante una stampa avviata **dal touchscreen**: ventole | Scala ventole: confrontare % touchscreen con `fans_percent` (ipotesi 0-255 → %) | ✅ 29/10: ventola pezzo grezza 255.0 → farm 100% = touchscreen 100%. Scala 0-255 confermata (il 78% iniziale era la rampa del primo layer). |
+| HW-M2-06 | 🟢 | Durante la stessa stampa | Nome file, %, layer corrente/totale, tempo residuo coerenti; `printing` | ✅ 29/10 (benchy da Orca, avviata dal touchscreen): nome file, % e tempo residuo coerenti (2270 s ≈ 38 min del file). Solo layer corrente: **il totale layer non è nel protocollo**. Sottostato 1066 (spurgo, non documentato) ora = preparazione. |
+| HW-M2-07 | 🟢 | Pausa/ripresa **dal touchscreen** | Transizioni `pausing → paused → resuming → printing` | ✅ 29/10: pausa e ripresa dal touchscreen → `pausing` (2501) → `resuming` (2401) → `printing` (2075). `paused` non visto col polling a 5 s. |
+| HW-M2-08 | 🟢 | Fine stampa | `finished` (sub 2077), poi `idle` | ⚠️ 29/10: `printing` al 99% per ~2,5 min (scarico filamento), poi direttamente `idle`; `finished` (2077) non visto col polling a 5 s. In M4 la fine lavoro deve gestire anche `printing`→`idle` a ~100%. |
 | HW-M2-09 | 🟢 | Staccare il cavo/Wi-Fi della stampante per 2 min durante una stampa | Card offline entro ~65 s; **stato lavoro invariato**; nessun archivio "completato"; al ritorno riconnessione e stato reale | |
 | HW-M2-10 | 🟢 | Riavvio ALVEOLAB Farm con CC2 accesa | Riconnessione senza errore `too many clients` (client id stabile) | |
-| HW-M2-11 | 🟢 | Farm + ElegooSlicer + app ELEGOO connessi insieme | Annotare quanti client accetta; comportamento con `too many clients` | |
+| HW-M2-11 | 🟢 | Farm + ElegooSlicer + app ELEGOO connessi insieme | Annotare quanti client accetta; comportamento con `too many clients` | ✅ 29/10 (parziale): farm + OrcaSlicer (Elegoo Link) + client di prova insieme, nessun `too many clients`. Limite massimo non cercato. |
 | HW-M2-12 | 🟢 | Provocare un errore (es. filamento esaurito, se sicuro) | Fault riportato con codice (109) | |
 | HW-M2-13 | 🟢 | Continuità push 6000: log diagnostico | Gli `id` dei push sono consecutivi? (SDK) o serve `result.sequence`? | ✅ 29/10: push 6000 con `id` dell'envelope consecutivi (10, 11, 12…), nessun refresh necessario. |
 
@@ -45,10 +45,10 @@ Legenda rischio: 🟢 sola lettura · 🟡 cambia stato non distruttivo · 🔴 
 
 | ID | Rischio | Test | Atteso | Esito |
 |---|---|---|---|---|
-| HW-M5-01 | 🟢 | 4 bobine diverse, `GET …/telemetry` → `multicolor_slots` | `tray_id` 0-based o 1-based? annotare | |
-| HW-M5-02 | 🟢 | Bobina ELEGOO con RFID vs bobina generica dichiarata a mano | Il protocollo distingue rilevato/dichiarato? (ipotesi: no) | |
+| HW-M5-01 | 🟢 | 4 bobine diverse, `GET …/telemetry` → `multicolor_slots` | `tray_id` 0-based o 1-based? annotare | ✅ 29/10: `tray_id` 0-based (0-3). |
+| HW-M5-02 | 🟢 | Bobina ELEGOO con RFID vs bobina generica dichiarata a mano | Il protocollo distingue rilevato/dichiarato? (ipotesi: no) | ⚠️ 29/10: bobina dichiarata a mano → `brand` "Generic", `filament_code` "0x0006", nessun campo RFID/manuale. Manca il confronto con una bobina ELEGOO con tag. |
 | HW-M5-03 | 🟢 | Svuotare uno slot | `status = 0`, slot `loaded=false` | |
-| HW-M5-04 | 🟢 | Significato `status` 1 vs 2 | Annotare (precaricato/caricato vs presente/attivo) | |
+| HW-M5-04 | 🟢 | Significato `status` 1 vs 2 | Annotare (precaricato/caricato vs presente/attivo) | ✅ 29/10: `status` 1 = presente, non caricata (campi vuoti); 2 = caricata (`active_tray_id` = quello slot). |
 | HW-M5-05 | 🔴 | Stampa 2 colori con `slot_map` (`t` vs `slot`) | Colori corretti | |
 
 ## M2 — Prima connessione: procedura consigliata

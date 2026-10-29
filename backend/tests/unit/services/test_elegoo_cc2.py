@@ -537,7 +537,8 @@ class TestClient:
         fake = _connect_and_register(harness)
         before = len(fake.methods_sent())
         harness.client.handle_message(harness.client.topics.api_status, fx.DELTA_STATUS_PUSH)
-        assert fake.methods_sent()[before:] == [1002]
+        # 2005 too: 1002 carries no CANVAS on real firmware, the lost push might have.
+        assert fake.methods_sent()[before:] == [1002, 2005]
         assert harness.client.telemetry().job_state is JobState.UNKNOWN
 
     def test_error_response_does_not_overwrite_status(self, harness):
@@ -671,10 +672,31 @@ class TestRealHardwareCapture:
         assert [s.loaded for s in t.multicolor_slots] == [True, False, False, False]
         assert all(s.material is None and s.color_hex is None for s in t.multicolor_slots)
 
+    def test_observed_purge_substatus_is_preparing(self):
+        """1066 seen on our CC2 before the first layer; unknown to SDK and docs."""
+        assert job_state_from_machine_status(2, 1066) is JobState.PREPARING
+
     def test_chamber_not_advertised(self):
         caps = capabilities_for("elegoo", "Centauri 2")
         assert not caps.supports(Capability.CHAMBER_TEMPERATURE)
         assert caps.notes[Capability.CHAMBER_TEMPERATURE]
+
+    def test_canvas_push_merges_into_full_canvas(self, harness):
+        """Regression: 1002 carries no canvas_info on our firmware, so a CANVAS
+        push used to replace the whole 2005 picture and lose active_tray_id."""
+        fake = _connect_and_register(harness)
+        topics = harness.client.topics
+        harness.client.handle_message(topics.api_response, fx.REAL_FULL_STATUS_IDLE)
+        harness.client.handle_message(topics.api_response, fx.REAL_CANVAS_STATUS_RESPONSE)
+        fake.published.clear()
+
+        push = {"id": 1, "method": 6000, "result": {"canvas_info": {"active_tray_id": 0}}}
+        harness.client.handle_message(topics.api_status, push)
+
+        slots = harness.client.telemetry().multicolor_slots
+        assert [s.slot_index for s in slots] == [0, 1, 2, 3]  # tray list kept
+        assert [s.active for s in slots] == [True, False, False, False]
+        assert fake.methods_sent() == [2005]  # authoritative re-read, read-only
 
     def test_consecutive_push_ids_need_no_refresh(self):
         cache = p.CC2StatusCache()

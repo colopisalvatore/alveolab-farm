@@ -26,6 +26,7 @@ Safety rules this client enforces:
 
 from __future__ import annotations
 
+import copy
 import itertools
 import json
 import logging
@@ -339,14 +340,29 @@ class ElegooCC2Client:
             return
 
         refresh = False
+        refresh_canvas = False
         with self._lock:
             if method == p.METHOD_GET_STATUS:
                 self._cache.apply_full(result)
+                if isinstance(result.get("canvas_info"), dict):
+                    self._canvas_info = copy.deepcopy(result["canvas_info"])
             elif method == p.METHOD_ON_STATUS:
                 push_id = payload.get("id") if isinstance(payload.get("id"), int) else None
                 merged, refresh = self._cache.apply_delta(push_id, result)
                 if merged is None and not refresh:
                     return
+                # Our CC2 (fw 02.01.01.04) has no canvas_info in 1002, so the
+                # status cache only ever holds CANVAS fragments from pushes.
+                # Merge them into the full 2005 picture instead of replacing
+                # it (that dropped active_tray_id), then re-read 2005 since the
+                # exact shape of these pushes is not confirmed yet.
+                canvas_delta = result.get("canvas_info")
+                if isinstance(canvas_delta, dict):
+                    if isinstance(self._canvas_info, dict):
+                        p._deep_merge(self._canvas_info, canvas_delta)
+                    else:
+                        self._canvas_info = copy.deepcopy(canvas_delta)
+                    refresh_canvas = True
             elif method in (p.METHOD_GET_ATTRIBUTES, p.METHOD_ON_ATTRIBUTES):
                 self._attributes = dict(result)
             elif method == p.METHOD_GET_CANVAS_STATUS:
@@ -355,10 +371,11 @@ class ElegooCC2Client:
                     self._canvas_info = canvas
             else:
                 return
-            if isinstance(self._cache.status, dict) and isinstance(self._cache.status.get("canvas_info"), dict):
-                self._canvas_info = self._cache.status["canvas_info"]
         if refresh:
             self.request_status_update()
+        if refresh or refresh_canvas:
+            # A lost push may have carried CANVAS changes too: 1002 does not.
+            self.request(p.METHOD_GET_CANVAS_STATUS)
         self._refresh_state()
 
     def _handle_register(self, payload: dict) -> None:

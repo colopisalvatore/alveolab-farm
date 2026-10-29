@@ -108,6 +108,10 @@ PRINT_SUB_EXTRUDER_PREHEATING = frozenset({1045, 1096})
 PRINT_SUB_BED_PREHEATING = frozenset({1405, 1906})
 PRINT_SUB_HOMING = frozenset({2801, 2802})
 PRINT_SUB_AUTO_LEVELING = frozenset({2901, 2902})
+# Not in the SDK nor the community notes. Seen on our CC2 (fw 02.01.01.04,
+# 29/10/2026) between two nozzle preheats with the part fan on, before the
+# first layer: nozzle wipe/purge. Treated as preparation, not printing.
+PRINT_SUB_OBSERVED_PREPARING = frozenset({1066})
 PRINT_SUB_PAUSING = 2501
 PRINT_SUB_PAUSED = frozenset({2502, 2505})
 PRINT_SUB_RESUMING = 2401
