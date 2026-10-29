@@ -8,6 +8,7 @@ import {
   type Printer as PrinterType,
   type SlicerPipeline,
 } from '../api/client';
+import { bambuPrintersOnly } from './printer-providers/capabilities';
 import { useToast } from '../contexts/ToastContext';
 import { useSliceJobTracker } from '../contexts/SliceJobTrackerContext';
 
@@ -44,6 +45,8 @@ export function RunWithPipelineModal({ source, onClose }: RunWithPipelineModalPr
   const { data: printers } = useQuery({
     queryKey: ['printers'],
     queryFn: () => api.getPrinters(),
+    // ALVEOLAB Farm: Bambu-only flow, ELEGOO printers are not offered here.
+    select: bambuPrintersOnly,
   });
   // Cap from settings (PR C). Falls back to 50 when the fetch is in-flight or
   // missing — same default the backend writes.

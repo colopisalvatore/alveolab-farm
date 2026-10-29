@@ -7958,4 +7958,28 @@ export default {
     noReadAccess: '您沒有查看庫存預測的權限。',
     noWriteAccess: '您沒有修改預測設定的權限。',
   },
+  // ALVEOLAB Farm (multi-provider printers, ELEGOO CANVAS)
+  farm: {
+    provider: '製造商',
+    providerBambu: 'Bambu Lab',
+    providerElegoo: 'ELEGOO',
+    readOnlyControls: '僅監控：暫時無法從農場控制此印表機。',
+    printNotAvailable: '此印表機暫不支援從農場列印。',
+    canvasInUse: '使用中',
+    canvasDeclared: '顏色與材料為印表機上的設定，未經驗證。',
+    canvasNotReported: '印表機尚未回報 CANVAS 狀態。',
+    elegooFind: '尋找',
+    elegooFindHint: '填寫 IP 位址則直接查詢該印表機；留空則在網路中搜尋。',
+    elegooNotFound: '沒有 ELEGOO 印表機回應。',
+    elegooLanOff: 'LAN Only 模式已關閉：請在印表機觸控螢幕上開啟，否則農場無法連線。',
+    accessCodeOptional: '存取碼（在 LAN Only 模式下於觸控螢幕設定）',
+    canvas: 'CANVAS',
+    connectError: {
+      register_timeout: '印表機未回應：請在觸控螢幕上開啟 LAN Only 模式。未新增印表機。',
+      auth_failed: '印表機拒絕了存取碼。未新增印表機。',
+      too_many_clients: '印表機拒絕連線：已連線的應用程式過多。未新增印表機。',
+      register_failed: '印表機拒絕註冊。未新增印表機。',
+      unreachable: '此 IP 位址上的印表機無回應。未新增印表機。',
+    },
+  },
 };

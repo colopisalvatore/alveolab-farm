@@ -7960,4 +7960,28 @@ export default {
     noReadAccess: 'Non hai il permesso di visualizzare le previsioni di inventario.',
     noWriteAccess: 'Non hai il permesso di modificare le impostazioni di previsione.',
   },
+  // ALVEOLAB Farm (multi-provider printers, ELEGOO CANVAS)
+  farm: {
+    provider: 'Produttore',
+    providerBambu: 'Bambu Lab',
+    providerElegoo: 'ELEGOO',
+    readOnlyControls: 'Solo monitoraggio: questa stampante non si può ancora comandare dalla farm.',
+    printNotAvailable: 'La stampa dalla farm non è ancora disponibile per questa stampante.',
+    canvasInUse: 'In uso',
+    canvasDeclared: 'Colori e materiali come impostati sulla stampante, non verificati.',
+    canvasNotReported: 'La stampante non ha ancora inviato lo stato del CANVAS.',
+    elegooFind: 'Cerca',
+    elegooFindHint: 'Con un indirizzo IP la stampante viene interrogata direttamente; lascialo vuoto per cercare in rete.',
+    elegooNotFound: 'Nessuna stampante ELEGOO ha risposto.',
+    elegooLanOff: 'La modalità LAN Only è spenta: attivala dal touchscreen della stampante, altrimenti la farm non può collegarsi.',
+    accessCodeOptional: 'Codice di accesso (impostato dal touchscreen in modalità LAN Only)',
+    canvas: 'CANVAS',
+    connectError: {
+      register_timeout: 'La stampante non ha risposto: attiva la modalità LAN Only dal touchscreen. La stampante non è stata aggiunta.',
+      auth_failed: 'Codice di accesso rifiutato dalla stampante. La stampante non è stata aggiunta.',
+      too_many_clients: 'La stampante ha rifiutato la connessione: troppe app collegate. La stampante non è stata aggiunta.',
+      register_failed: 'La stampante ha rifiutato la registrazione. La stampante non è stata aggiunta.',
+      unreachable: 'Nessuna risposta dalla stampante a questo indirizzo IP. La stampante non è stata aggiunta.',
+    },
+  },
 };

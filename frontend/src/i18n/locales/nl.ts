@@ -8026,4 +8026,28 @@ export default {
     noReadAccess: 'Je hebt geen machtiging om voorraadprognoses te bekijken.',
     noWriteAccess: 'Je hebt geen machtiging om prognose-instellingen te wijzigen.',
   },
+  // ALVEOLAB Farm (multi-provider printers, ELEGOO CANVAS)
+  farm: {
+    provider: 'Fabrikant',
+    providerBambu: 'Bambu Lab',
+    providerElegoo: 'ELEGOO',
+    readOnlyControls: 'Alleen monitoring: deze printer kan nog niet vanuit de farm worden bediend.',
+    printNotAvailable: 'Printen vanuit de farm is nog niet beschikbaar voor deze printer.',
+    canvasInUse: 'In gebruik',
+    canvasDeclared: 'Kleuren en materialen zoals ingesteld op de printer, niet gecontroleerd.',
+    canvasNotReported: 'De printer heeft de CANVAS-status nog niet doorgegeven.',
+    elegooFind: 'Zoeken',
+    elegooFindHint: 'Met een IP-adres wordt de printer direct bevraagd; laat leeg om het netwerk te doorzoeken.',
+    elegooNotFound: 'Geen ELEGOO-printer heeft geantwoord.',
+    elegooLanOff: 'LAN Only-modus staat uit: zet hem aan via het touchscreen van de printer, anders kan de farm geen verbinding maken.',
+    accessCodeOptional: 'Toegangscode (ingesteld op het touchscreen in LAN Only-modus)',
+    canvas: 'CANVAS',
+    connectError: {
+      register_timeout: 'De printer antwoordde niet: zet LAN Only-modus aan via het touchscreen. De printer is niet toegevoegd.',
+      auth_failed: 'Toegangscode geweigerd door de printer. De printer is niet toegevoegd.',
+      too_many_clients: 'De printer weigerde de verbinding: te veel apps verbonden. De printer is niet toegevoegd.',
+      register_failed: 'De printer weigerde de registratie. De printer is niet toegevoegd.',
+      unreachable: 'Geen antwoord van de printer op dit IP-adres. De printer is niet toegevoegd.',
+    },
+  },
 };

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Check, AlertTriangle, Printer, Eye, EyeOff, Info, ChevronDown, ExternalLink, ArrowRightLeft } from 'lucide-react';
 import { api, virtualPrinterApi } from '../api/client';
+import { bambuPrintersOnly } from './printer-providers/capabilities';
 import { Card, CardContent, CardHeader } from './Card';
 import { Button } from './Button';
 import { useToast } from '../contexts/ToastContext';
@@ -51,6 +52,8 @@ export function VirtualPrinterSettings() {
   const { data: printers } = useQuery({
     queryKey: ['printers'],
     queryFn: api.getPrinters,
+    // ALVEOLAB Farm: Bambu-only flow, ELEGOO printers are not offered here.
+    select: bambuPrintersOnly,
   });
 
   // Fetch network interfaces for IP override (all modes when enabled)

@@ -7975,4 +7975,28 @@ export default {
     noReadAccess: 'Sie haben keine Berechtigung, Bestandsprognosen anzuzeigen.',
     noWriteAccess: 'Sie haben keine Berechtigung, Prognoseeinstellungen zu ändern.',
   },
+  // ALVEOLAB Farm (multi-provider printers, ELEGOO CANVAS)
+  farm: {
+    provider: 'Hersteller',
+    providerBambu: 'Bambu Lab',
+    providerElegoo: 'ELEGOO',
+    readOnlyControls: 'Nur Überwachung: Dieser Drucker kann noch nicht über die Farm gesteuert werden.',
+    printNotAvailable: 'Drucken über die Farm ist für diesen Drucker noch nicht verfügbar.',
+    canvasInUse: 'In Verwendung',
+    canvasDeclared: 'Farben und Materialien wie am Drucker eingestellt, nicht überprüft.',
+    canvasNotReported: 'Der Drucker hat seinen CANVAS-Status noch nicht gemeldet.',
+    elegooFind: 'Suchen',
+    elegooFindHint: 'Mit einer IP-Adresse wird der Drucker direkt abgefragt; leer lassen, um das Netzwerk zu durchsuchen.',
+    elegooNotFound: 'Kein ELEGOO-Drucker hat geantwortet.',
+    elegooLanOff: 'Der LAN-Only-Modus ist aus: Schalten Sie ihn am Touchscreen des Druckers ein, sonst kann sich die Farm nicht verbinden.',
+    accessCodeOptional: 'Zugangscode (am Touchscreen im LAN-Only-Modus festgelegt)',
+    canvas: 'CANVAS',
+    connectError: {
+      register_timeout: 'Der Drucker hat nicht geantwortet: Schalten Sie den LAN-Only-Modus am Touchscreen ein. Der Drucker wurde nicht hinzugefügt.',
+      auth_failed: 'Zugangscode vom Drucker abgelehnt. Der Drucker wurde nicht hinzugefügt.',
+      too_many_clients: 'Der Drucker hat die Verbindung abgelehnt: zu viele Apps verbunden. Der Drucker wurde nicht hinzugefügt.',
+      register_failed: 'Der Drucker hat die Registrierung abgelehnt. Der Drucker wurde nicht hinzugefügt.',
+      unreachable: 'Keine Antwort vom Drucker unter dieser IP-Adresse. Der Drucker wurde nicht hinzugefügt.',
+    },
+  },
 };

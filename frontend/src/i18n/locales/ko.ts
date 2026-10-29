@@ -7593,5 +7593,29 @@ export default {
         fail: '이 가상 프린터의 TLS 인증서가 없습니다. Bambuddy 데이터 디렉터리가 쓰기 가능한지 확인하세요.'
       }
     }
-  }
+  },
+  // ALVEOLAB Farm (multi-provider printers, ELEGOO CANVAS)
+  farm: {
+    provider: '제조사',
+    providerBambu: 'Bambu Lab',
+    providerElegoo: 'ELEGOO',
+    readOnlyControls: '모니터링 전용: 이 프린터는 아직 팜에서 제어할 수 없습니다.',
+    printNotAvailable: '이 프린터는 아직 팜에서 인쇄할 수 없습니다.',
+    canvasInUse: '사용 중',
+    canvasDeclared: '색상과 재료는 프린터에 설정된 값이며 확인되지 않았습니다.',
+    canvasNotReported: '프린터가 아직 CANVAS 상태를 보내지 않았습니다.',
+    elegooFind: '찾기',
+    elegooFindHint: 'IP 주소를 입력하면 프린터에 직접 문의합니다. 비워 두면 네트워크를 검색합니다.',
+    elegooNotFound: '응답한 ELEGOO 프린터가 없습니다.',
+    elegooLanOff: 'LAN Only 모드가 꺼져 있습니다. 프린터 터치스크린에서 켜세요. 그렇지 않으면 팜이 연결할 수 없습니다.',
+    accessCodeOptional: '액세스 코드 (LAN Only 모드에서 터치스크린으로 설정)',
+    canvas: 'CANVAS',
+    connectError: {
+      register_timeout: '프린터가 응답하지 않았습니다. 터치스크린에서 LAN Only 모드를 켜세요. 프린터가 추가되지 않았습니다.',
+      auth_failed: '프린터가 액세스 코드를 거부했습니다. 프린터가 추가되지 않았습니다.',
+      too_many_clients: '프린터가 연결을 거부했습니다: 연결된 앱이 너무 많습니다. 프린터가 추가되지 않았습니다.',
+      register_failed: '프린터가 등록을 거부했습니다. 프린터가 추가되지 않았습니다.',
+      unreachable: '이 IP 주소의 프린터에서 응답이 없습니다. 프린터가 추가되지 않았습니다.',
+    },
+  },
 };

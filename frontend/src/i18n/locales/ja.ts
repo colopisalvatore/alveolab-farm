@@ -7974,4 +7974,28 @@ export default {
     noReadAccess: '在庫予測を閲覧する権限がありません。',
     noWriteAccess: '予測設定を変更する権限がありません。',
   },
+  // ALVEOLAB Farm (multi-provider printers, ELEGOO CANVAS)
+  farm: {
+    provider: 'メーカー',
+    providerBambu: 'Bambu Lab',
+    providerElegoo: 'ELEGOO',
+    readOnlyControls: '監視のみ：このプリンターはまだファームから操作できません。',
+    printNotAvailable: 'このプリンターではファームからの印刷はまだ利用できません。',
+    canvasInUse: '使用中',
+    canvasDeclared: '色と素材はプリンター上の設定値で、検証されていません。',
+    canvasNotReported: 'プリンターはまだCANVASの状態を送信していません。',
+    elegooFind: '検索',
+    elegooFindHint: 'IPアドレスを入力するとプリンターに直接問い合わせます。空欄の場合はネットワークを検索します。',
+    elegooNotFound: '応答したELEGOOプリンターはありません。',
+    elegooLanOff: 'LAN Onlyモードがオフです。プリンターのタッチスクリーンでオンにしてください。オフのままではファームに接続できません。',
+    accessCodeOptional: 'アクセスコード（LAN Onlyモードでタッチスクリーンから設定）',
+    canvas: 'CANVAS',
+    connectError: {
+      register_timeout: 'プリンターが応答しませんでした。タッチスクリーンでLAN Onlyモードをオンにしてください。プリンターは追加されませんでした。',
+      auth_failed: 'プリンターがアクセスコードを拒否しました。プリンターは追加されませんでした。',
+      too_many_clients: 'プリンターが接続を拒否しました：接続中のアプリが多すぎます。プリンターは追加されませんでした。',
+      register_failed: 'プリンターが登録を拒否しました。プリンターは追加されませんでした。',
+      unreachable: 'このIPアドレスのプリンターから応答がありません。プリンターは追加されませんでした。',
+    },
+  },
 };

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Loader2, Check, CheckCircle, XCircle, Layers } from 'lucide-react';
 import { api, type InventorySpool, type PrinterStatus, type AMSTray } from '../../api/client';
+import { bambuPrintersOnly } from '../printer-providers/capabilities';
 import { ConfirmModal } from '../ConfirmModal';
 import { AmsUnitCard, NozzleBadge } from './AmsUnitCard';
 import type { AmsThresholds } from './AmsUnitCard';
@@ -128,6 +129,8 @@ export function AssignToAmsModal({
   const { data: selectablePrinters = [], isLoading: printersLoading } = useQuery({
     queryKey: ['printers'],
     queryFn: () => api.getPrinters(),
+    // ALVEOLAB Farm: Bambu-only flow, ELEGOO printers are not offered here.
+    select: bambuPrintersOnly,
     enabled: isOpen && showPrinterPicker,
   });
   const activePrinters = useMemo(

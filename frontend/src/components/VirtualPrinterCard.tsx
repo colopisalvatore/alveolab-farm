@@ -6,6 +6,7 @@ import {
   ChevronDown, ChevronRight, ArrowRightLeft, Trash2, ShieldCheck, Copy, Stethoscope,
 } from 'lucide-react';
 import { api, multiVirtualPrinterApi } from '../api/client';
+import { bambuPrintersOnly } from './printer-providers/capabilities';
 import type { VirtualPrinterConfig } from '../api/client';
 import { Card, CardContent } from './Card';
 import { Button } from './Button';
@@ -112,6 +113,8 @@ export function VirtualPrinterCard({ printer, models }: VirtualPrinterCardProps)
   const { data: printers } = useQuery({
     queryKey: ['printers'],
     queryFn: api.getPrinters,
+    // ALVEOLAB Farm: Bambu-only flow, ELEGOO printers are not offered here.
+    select: bambuPrintersOnly,
   });
 
   // Fetch network interfaces

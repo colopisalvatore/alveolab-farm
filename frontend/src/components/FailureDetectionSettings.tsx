@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, ScanEye, Check, X, AlertTriangle, Info } from 'lucide-react';
 import { api } from '../api/client';
+import { bambuPrintersOnly } from './printer-providers/capabilities';
 import { Card, CardContent, CardHeader } from './Card';
 import { Button } from './Button';
 import { Toggle } from './Toggle';
@@ -40,6 +41,8 @@ export function FailureDetectionSettings() {
   const { data: printers } = useQuery({
     queryKey: ['printers'],
     queryFn: api.getPrinters,
+    // ALVEOLAB Farm: Bambu-only flow, ELEGOO printers are not offered here.
+    select: bambuPrintersOnly,
   });
 
   useEffect(() => {

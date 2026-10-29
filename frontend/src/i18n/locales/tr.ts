@@ -7900,4 +7900,28 @@ export default {
     noReadAccess: 'Envanter tahminlerini görüntüleme izniniz yok.',
     noWriteAccess: 'Tahmin ayarlarını değiştirme izniniz yok.',
   },
+  // ALVEOLAB Farm (multi-provider printers, ELEGOO CANVAS)
+  farm: {
+    provider: 'Üretici',
+    providerBambu: 'Bambu Lab',
+    providerElegoo: 'ELEGOO',
+    readOnlyControls: 'Yalnızca izleme: bu yazıcı henüz çiftlikten kontrol edilemiyor.',
+    printNotAvailable: 'Bu yazıcı için çiftlikten yazdırma henüz kullanılamıyor.',
+    canvasInUse: 'Kullanımda',
+    canvasDeclared: 'Renkler ve malzemeler yazıcıda ayarlandığı gibi, doğrulanmadı.',
+    canvasNotReported: 'Yazıcı henüz CANVAS durumunu bildirmedi.',
+    elegooFind: 'Bul',
+    elegooFindHint: 'IP adresi girilirse yazıcı doğrudan sorgulanır; ağda aramak için boş bırakın.',
+    elegooNotFound: 'Hiçbir ELEGOO yazıcı yanıt vermedi.',
+    elegooLanOff: 'LAN Only modu kapalı: yazıcının dokunmatik ekranından açın, aksi halde çiftlik bağlanamaz.',
+    accessCodeOptional: 'Erişim kodu (LAN Only modunda dokunmatik ekrandan ayarlanır)',
+    canvas: 'CANVAS',
+    connectError: {
+      register_timeout: 'Yazıcı yanıt vermedi: dokunmatik ekrandan LAN Only modunu açın. Yazıcı eklenmedi.',
+      auth_failed: 'Erişim kodu yazıcı tarafından reddedildi. Yazıcı eklenmedi.',
+      too_many_clients: 'Yazıcı bağlantıyı reddetti: çok fazla uygulama bağlı. Yazıcı eklenmedi.',
+      register_failed: 'Yazıcı kaydı reddetti. Yazıcı eklenmedi.',
+      unreachable: 'Bu IP adresindeki yazıcıdan yanıt yok. Yazıcı eklenmedi.',
+    },
+  },
 };

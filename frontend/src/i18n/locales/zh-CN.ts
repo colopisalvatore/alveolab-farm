@@ -7958,4 +7958,28 @@ export default {
     noReadAccess: '您没有查看库存预测的权限。',
     noWriteAccess: '您没有修改预测设置的权限。',
   },
+  // ALVEOLAB Farm (multi-provider printers, ELEGOO CANVAS)
+  farm: {
+    provider: '制造商',
+    providerBambu: 'Bambu Lab',
+    providerElegoo: 'ELEGOO',
+    readOnlyControls: '仅监控：暂时无法从农场控制此打印机。',
+    printNotAvailable: '此打印机暂不支持从农场打印。',
+    canvasInUse: '使用中',
+    canvasDeclared: '颜色和材料为打印机上的设置，未经验证。',
+    canvasNotReported: '打印机尚未上报 CANVAS 状态。',
+    elegooFind: '查找',
+    elegooFindHint: '填写 IP 地址则直接查询该打印机；留空则在网络中搜索。',
+    elegooNotFound: '没有 ELEGOO 打印机响应。',
+    elegooLanOff: 'LAN Only 模式已关闭：请在打印机触摸屏上开启，否则农场无法连接。',
+    accessCodeOptional: '访问码（在 LAN Only 模式下于触摸屏设置）',
+    canvas: 'CANVAS',
+    connectError: {
+      register_timeout: '打印机未响应：请在触摸屏上开启 LAN Only 模式。未添加打印机。',
+      auth_failed: '打印机拒绝了访问码。未添加打印机。',
+      too_many_clients: '打印机拒绝连接：已连接的应用过多。未添加打印机。',
+      register_failed: '打印机拒绝注册。未添加打印机。',
+      unreachable: '此 IP 地址上的打印机无响应。未添加打印机。',
+    },
+  },
 };

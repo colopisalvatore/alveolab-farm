@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { CameraWall, type CameraWallStatus } from '../components/CameraWall';
 import { type CameraTileStatusMode } from '../components/CameraTile';
 import { api, setStreamToken } from '../api/client';
+import { bambuPrintersOnly } from '../components/printer-providers/capabilities';
 import { useAuth } from '../contexts/AuthContext';
 
 // Kiosk polling cadence. Matches the staleTime the in-page wall runs at, so a
@@ -117,6 +118,8 @@ export function CamWallPage() {
   const printersQuery = useQuery({
     queryKey: ['printers'],
     queryFn: () => api.getPrinters(),
+    // ALVEOLAB Farm: Bambu-only flow, ELEGOO printers are not offered here.
+    select: bambuPrintersOnly,
     enabled: !kiosk && !authLoading && (!authEnabled || user !== null),
     refetchInterval: KIOSK_POLL_MS,
   });

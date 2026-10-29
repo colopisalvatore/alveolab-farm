@@ -8026,4 +8026,28 @@ export default {
     noReadAccess: 'You do not have permission to view inventory forecasts.',
     noWriteAccess: 'You do not have permission to modify forecast settings.',
   },
+  // ALVEOLAB Farm (multi-provider printers, ELEGOO CANVAS)
+  farm: {
+    provider: 'Manufacturer',
+    providerBambu: 'Bambu Lab',
+    providerElegoo: 'ELEGOO',
+    readOnlyControls: 'Monitoring only: this printer cannot be controlled from the farm yet.',
+    printNotAvailable: 'Printing from the farm is not available for this printer yet.',
+    canvasInUse: 'In use',
+    canvasDeclared: 'Colours and materials as set on the printer, not verified.',
+    canvasNotReported: 'The printer has not reported its CANVAS yet.',
+    elegooFind: 'Find',
+    elegooFindHint: 'With an IP address the printer is asked directly; leave it empty to search the network.',
+    elegooNotFound: 'No ELEGOO printer answered.',
+    elegooLanOff: 'LAN Only Mode is off: turn it on from the printer touchscreen, otherwise the farm cannot connect.',
+    accessCodeOptional: 'Access code (set on the touchscreen in LAN Only Mode)',
+    canvas: 'CANVAS',
+    connectError: {
+      register_timeout: 'The printer did not answer: turn on LAN Only Mode from its touchscreen. The printer was not added.',
+      auth_failed: 'Access code rejected by the printer. The printer was not added.',
+      too_many_clients: 'The printer refused the connection: too many apps are connected to it. The printer was not added.',
+      register_failed: 'The printer refused the registration. The printer was not added.',
+      unreachable: 'No answer from the printer at this IP address. The printer was not added.',
+    },
+  },
 };

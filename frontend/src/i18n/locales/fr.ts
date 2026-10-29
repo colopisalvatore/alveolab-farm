@@ -7961,4 +7961,28 @@ export default {
     noReadAccess: 'Vous n\'avez pas la permission de consulter les prévisions de stock.',
     noWriteAccess: 'Vous n\'avez pas la permission de modifier les paramètres de prévision.',
   },
+  // ALVEOLAB Farm (multi-provider printers, ELEGOO CANVAS)
+  farm: {
+    provider: 'Fabricant',
+    providerBambu: 'Bambu Lab',
+    providerElegoo: 'ELEGOO',
+    readOnlyControls: 'Surveillance uniquement : cette imprimante ne peut pas encore être pilotée depuis la ferme.',
+    printNotAvailable: 'L\'impression depuis la ferme n\'est pas encore disponible pour cette imprimante.',
+    canvasInUse: 'En cours d\'utilisation',
+    canvasDeclared: 'Couleurs et matériaux tels que réglés sur l\'imprimante, non vérifiés.',
+    canvasNotReported: 'L\'imprimante n\'a pas encore transmis l\'état de son CANVAS.',
+    elegooFind: 'Rechercher',
+    elegooFindHint: 'Avec une adresse IP, l\'imprimante est interrogée directement ; laissez vide pour chercher sur le réseau.',
+    elegooNotFound: 'Aucune imprimante ELEGOO n\'a répondu.',
+    elegooLanOff: 'Le mode LAN Only est désactivé : activez-le depuis l\'écran tactile de l\'imprimante, sinon la ferme ne peut pas se connecter.',
+    accessCodeOptional: 'Code d\'accès (défini sur l\'écran tactile en mode LAN Only)',
+    canvas: 'CANVAS',
+    connectError: {
+      register_timeout: 'L\'imprimante n\'a pas répondu : activez le mode LAN Only depuis son écran tactile. L\'imprimante n\'a pas été ajoutée.',
+      auth_failed: 'Code d\'accès refusé par l\'imprimante. L\'imprimante n\'a pas été ajoutée.',
+      too_many_clients: 'L\'imprimante a refusé la connexion : trop d\'applications connectées. L\'imprimante n\'a pas été ajoutée.',
+      register_failed: 'L\'imprimante a refusé l\'enregistrement. L\'imprimante n\'a pas été ajoutée.',
+      unreachable: 'Aucune réponse de l\'imprimante à cette adresse IP. L\'imprimante n\'a pas été ajoutée.',
+    },
+  },
 };

@@ -8024,4 +8024,28 @@ errors: {
     noReadAccess: 'Du har inte behörighet att visa lagerprognoser.',
     noWriteAccess: 'Du har inte behörighet att modifiera prognosinställningar.',
   },
+  // ALVEOLAB Farm (multi-provider printers, ELEGOO CANVAS)
+  farm: {
+    provider: 'Tillverkare',
+    providerBambu: 'Bambu Lab',
+    providerElegoo: 'ELEGOO',
+    readOnlyControls: 'Endast övervakning: den här skrivaren kan ännu inte styras från farmen.',
+    printNotAvailable: 'Utskrift från farmen är ännu inte tillgänglig för den här skrivaren.',
+    canvasInUse: 'Används',
+    canvasDeclared: 'Färger och material enligt inställningen på skrivaren, inte verifierade.',
+    canvasNotReported: 'Skrivaren har ännu inte rapporterat sin CANVAS-status.',
+    elegooFind: 'Sök',
+    elegooFindHint: 'Med en IP-adress frågas skrivaren direkt; lämna tomt för att söka i nätverket.',
+    elegooNotFound: 'Ingen ELEGOO-skrivare svarade.',
+    elegooLanOff: 'LAN Only-läget är av: slå på det från skrivarens pekskärm, annars kan farmen inte ansluta.',
+    accessCodeOptional: 'Åtkomstkod (inställd på pekskärmen i LAN Only-läge)',
+    canvas: 'CANVAS',
+    connectError: {
+      register_timeout: 'Skrivaren svarade inte: slå på LAN Only-läget från pekskärmen. Skrivaren lades inte till.',
+      auth_failed: 'Åtkomstkoden nekades av skrivaren. Skrivaren lades inte till.',
+      too_many_clients: 'Skrivaren nekade anslutningen: för många appar anslutna. Skrivaren lades inte till.',
+      register_failed: 'Skrivaren nekade registreringen. Skrivaren lades inte till.',
+      unreachable: 'Inget svar från skrivaren på den här IP-adressen. Skrivaren lades inte till.',
+    },
+  },
 };

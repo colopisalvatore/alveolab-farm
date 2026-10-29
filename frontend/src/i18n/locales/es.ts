@@ -7983,4 +7983,28 @@ export default {
     noReadAccess: 'No tiene permiso para ver las previsiones de inventario.',
     noWriteAccess: 'No tiene permiso para modificar los ajustes de previsión.',
   },
+  // ALVEOLAB Farm (multi-provider printers, ELEGOO CANVAS)
+  farm: {
+    provider: 'Fabricante',
+    providerBambu: 'Bambu Lab',
+    providerElegoo: 'ELEGOO',
+    readOnlyControls: 'Solo supervisión: esta impresora aún no se puede controlar desde la granja.',
+    printNotAvailable: 'La impresión desde la granja aún no está disponible para esta impresora.',
+    canvasInUse: 'En uso',
+    canvasDeclared: 'Colores y materiales tal como se configuraron en la impresora, sin verificar.',
+    canvasNotReported: 'La impresora aún no ha enviado el estado de su CANVAS.',
+    elegooFind: 'Buscar',
+    elegooFindHint: 'Con una dirección IP se consulta la impresora directamente; déjala vacía para buscar en la red.',
+    elegooNotFound: 'Ninguna impresora ELEGOO respondió.',
+    elegooLanOff: 'El modo LAN Only está desactivado: actívalo desde la pantalla táctil de la impresora; si no, la granja no puede conectarse.',
+    accessCodeOptional: 'Código de acceso (configurado en la pantalla táctil en modo LAN Only)',
+    canvas: 'CANVAS',
+    connectError: {
+      register_timeout: 'La impresora no respondió: activa el modo LAN Only desde su pantalla táctil. La impresora no se añadió.',
+      auth_failed: 'La impresora rechazó el código de acceso. La impresora no se añadió.',
+      too_many_clients: 'La impresora rechazó la conexión: demasiadas apps conectadas. La impresora no se añadió.',
+      register_failed: 'La impresora rechazó el registro. La impresora no se añadió.',
+      unreachable: 'Sin respuesta de la impresora en esta dirección IP. La impresora no se añadió.',
+    },
+  },
 };

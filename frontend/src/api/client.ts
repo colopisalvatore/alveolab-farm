@@ -438,8 +438,55 @@ export interface Printer {
   camera_rotation: number;  // 0, 90, 180, 270 degrees
   plate_detection_enabled: boolean;  // Check plate before print
   plate_detection_roi?: PlateDetectionROI;  // ROI for plate detection
+  // ALVEOLAB Farm: protocol family. Absent on responses from older backends,
+  // which only ever spoke Bambu.
+  provider?: PrinterProviderId;
   created_at: string;
   updated_at: string;
+}
+
+// ALVEOLAB Farm provider layer (backend/app/api/routes/printer_providers.py).
+export type PrinterProviderId = 'bambu' | 'elegoo';
+
+/** What the farm can do with a printer; `notes` say why a capability is missing. */
+export interface PrinterCapabilities {
+  provider: PrinterProviderId;
+  model: string | null;
+  supported: string[];
+  notes: Record<string, string>;
+}
+
+export interface MultiColorSlot {
+  unit_id: number;
+  slot_index: number;
+  loaded: boolean | null;
+  material: string | null;
+  color_hex: string | null;  // "RRGGBB", no leading '#'
+  name: string | null;
+  vendor: string | null;
+  // Whether the printer read the spool (RFID) or the operator declared it.
+  // CC2 does not say, so it reports "unknown".
+  source: 'detected' | 'declared' | 'unknown';
+  active: boolean;
+}
+
+/** Provider-neutral telemetry snapshot (backend NormalizedTelemetry). */
+export interface PrinterTelemetry {
+  provider: PrinterProviderId;
+  connection: string;
+  job_state: string;
+  firmware_version?: string | null;
+  multicolor_slots?: MultiColorSlot[];
+}
+
+export interface ElegooDiscoveredPrinter {
+  ip_address: string;
+  serial_number: string;
+  name: string | null;
+  model: string | null;
+  access_code_required: boolean;
+  lan_only: boolean;
+  provider: 'elegoo';
 }
 
 export interface HMSError {
@@ -733,6 +780,7 @@ export interface PrinterCreate {
   model?: string;
   location?: string;
   auto_archive?: boolean;
+  provider?: PrinterProviderId;  // ALVEOLAB Farm; omitted = bambu
   // Maintenance Mode flag (#1476). Backend already gates MQTT, queue dispatch,
   // scheduler, metrics and the print picker on this; toggling via PATCH
   // /printers/{id} disconnects or reconnects MQTT accordingly.
@@ -4870,6 +4918,16 @@ export const api = {
       `/printers/${id}?delete_archives=${deleteArchives}`,
       { method: 'DELETE' }
     ),
+  // ALVEOLAB Farm provider layer
+  getPrinterCapabilities: (id: number) =>
+    request<PrinterCapabilities>(`/printer-providers/printers/${id}/capabilities`),
+  getPrinterTelemetry: (id: number) =>
+    request<PrinterTelemetry>(`/printer-providers/printers/${id}/telemetry`),
+  discoverElegooPrinters: (targets: string[] = [], timeout: number = 5) =>
+    request<ElegooDiscoveredPrinter[]>('/printer-providers/elegoo/discover', {
+      method: 'POST',
+      body: JSON.stringify({ targets, timeout }),
+    }),
   getDeveloperModeWarnings: () =>
     request<{ printer_id: number; name: string }[]>('/printers/developer-mode-warnings'),
   getAvailableFilaments: (model: string, location?: string) => {
