@@ -41,7 +41,15 @@ _CC2_NOTES = {
     Capability.JOB_STOP: "method 1022; switched on only after HW-M4-06",
     Capability.FILE_UPLOAD: "HTTP PUT /upload; switched on only after HW-M4-01",
     Capability.FILE_LIST: "not implemented by the official SDK for CC2",
-    Capability.MULTICOLOR_SLOT_EDIT: "no slot-edit method in the official SDK; manual mapping in the farm (M5)",
+    Capability.MULTICOLOR_SLOT_EDIT: (
+        "method 2003, as sent by ELEGOO's device page in Orca Slicer (not in the official SDK); "
+        "printer idle only; switched on only after HW-M5-06"
+    ),
+    Capability.MULTICOLOR_AUTO_REFILL: "method 2004 {auto_refill}; switched on only after HW-M5-07",
+    Capability.MULTICOLOR_LOAD_UNLOAD: (
+        "methods 2001 / 2002, as sent by ELEGOO's device page; printer idle or paused; "
+        "switched on only after HW-M5-08 / HW-M5-09"
+    ),
     Capability.CAMERA: "no LAN stream in the official SDK; community reports MJPEG on :8080 (unverified)",
     Capability.QUEUE_DISPATCH: "files sliced for the CC2 only; needs file_upload and job_start",
     Capability.AUTO_ARCHIVE: "archive pipeline reads Bambu 3MF over FTPS; the CC2 exposes no file download",
@@ -49,14 +57,23 @@ _CC2_NOTES = {
 }
 
 
-# M4 job control is switched on per capability, after its hardware test, by
-# listing it in this environment variable (comma-separated capability values,
-# e.g. "file_upload,job_start"). Unset = read-only, as in M2/M3. Kept out of
+# M4 job control and M5 CANVAS commands are switched on per capability, after
+# their hardware test, by listing it in this environment variable
+# (comma-separated capability values, e.g. "file_upload,job_start").
+# Unset = read-only, as in M2/M3. Kept out of
 # the database on purpose: enabling a command that moves the machine is a
 # deployment decision, not a click in the UI.
 ENABLE_ENV = "ALVEOLAB_ELEGOO_ENABLE"
 _SWITCHABLE = frozenset(
-    {Capability.FILE_UPLOAD, Capability.JOB_START, Capability.JOB_PAUSE_RESUME, Capability.JOB_STOP}
+    {
+        Capability.FILE_UPLOAD,
+        Capability.JOB_START,
+        Capability.JOB_PAUSE_RESUME,
+        Capability.JOB_STOP,
+        Capability.MULTICOLOR_SLOT_EDIT,
+        Capability.MULTICOLOR_AUTO_REFILL,
+        Capability.MULTICOLOR_LOAD_UNLOAD,
+    }
 )
 
 

@@ -11,7 +11,7 @@ Aggiornato: 2026-10-30. Ogni milestone è piccola, verificabile e lascia il perc
 | **M2** ELEGOO read-only | ✅ vertical slice (solo fixture) · ⏳ verifica hardware | Protocollo CC2, normalizzatore, client MQTT con registrazione/heartbeat/riconnessione, discovery UDP, registrazione manuale via API. **Mai provato su una CC2 reale.** |
 | M3 Integrazione UI | ✅ | Card per capability (Bambu invariata; ELEGOO: solo monitoraggio, niente Stampa/camera/file/controlli/HMS/diagnostica), pannello CANVAS in sola lettura, "Aggiungi stampante" con scelta produttore e ricerca ELEGOO per IP, motivo preciso se l'aggiunta fallisce, stampanti non Bambu escluse dai flussi solo Bambu (invio stampa, muro camere, rilevamento guasti, pipeline, stampante virtuale, AMS SpoolBuddy, profili K). Badge errori ELEGOO (codici riportati dalla stampante) e azioni di massa limitate alle Bambu, con avviso delle stampanti saltate. |
 | M4 Controllo e upload | 🟡 codice pronto · ⏳ prove hardware | Upload HTTP, avvio/pausa/ripresa/stop, coda verso la Centauri con file controllato (solo file slicati per CC2), fine lavoro dai push, archivio e piatto da liberare. **Comandi spenti di default**: si accendono uno per uno con `ALVEOLAB_ELEGOO_ENABLE` dopo ogni prova HW-M4. Dettagli sotto. |
-| M5 CANVAS e inventario | ⏳ | — |
+| M5 CANVAS e inventario | 🟡 comandi CANVAS pronti · ⏳ prove hardware, inventario | Modifica slot, carico/scarico e ricarica automatica dalla card, con i comandi della pagina ELEGOO in Orca Slicer. **Spenti di default** (`ALVEOLAB_ELEGOO_ENABLE`, prove HW-M5-06…09). Associazione bobine dell'inventario e controllo prima dell'avvio ancora da fare. |
 | M6 Produzione multibrand | ⏳ | — |
 | M7 Branding e consolidamento | ⏳ | — |
 
@@ -44,6 +44,10 @@ Patch su file upstream (piccole, per merge facili): `models/printer.py` (+1 colo
 - Archivio: callback start/complete per ELEGOO; fine lavoro solo da `finished`/`cancelled`/`failed` riportati dalla macchina, mai da disconnessione.
 
 ### M5 — CANVAS e inventario
+
+**Fatto (30/10/2026, da provare su hardware):** gestione del CANVAS dalla card della Centauri, con gli stessi comandi della pagina ELEGOO in Orca Slicer (ricerca §6.1): dichiarare la bobina di uno slot (2003), caricare e scaricare (2001/2002), ricarica automatica (2004). Ogni comando ha la sua capability (`multicolor_slot_edit`, `multicolor_load_unload`, `multicolor_auto_refill`), spenta finché non la si accende in `ALVEOLAB_ELEGOO_ENABLE` dopo la prova HW-M5-06…09. Backend `elegoo/canvas.py`, endpoint `/printer-providers/printers/{id}/canvas/…`, frontend `CanvasPanel` + `CanvasSlotModal`.
+
+Ancora da fare:
 - Associazione manuale bobina inventario ↔ (stampante, `canvas_id`, `tray_id`) (estendere `SpoolAssignment` o tabella parallela per non toccare la semantica AMS).
 - Controllo pre-avvio: `color_map` del file vs slot CANVAS (tipo + colore), blocco se discordanti, override esplicito.
 - Preset multicolore per produzione ripetitiva.

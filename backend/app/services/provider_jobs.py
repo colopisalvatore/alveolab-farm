@@ -63,6 +63,15 @@ def forget_dispatch(printer_id: int) -> None:
     _dispatched.pop(printer_id, None)
 
 
+def describe_outcome(event) -> str:
+    """How a ``JobEvent`` ended, for the log: 'finished', 'cancelled', 'failed',
+    'unknown', with 'inferred after N%' when the printer only went idle."""
+    outcome = getattr(event.outcome, "value", event.outcome) or "unknown"
+    if event.inferred:
+        return f"{outcome}, inferred after {event.progress or 0:.0f}%"
+    return str(outcome)
+
+
 async def _printing_item(db, printer_id: int) -> PrintQueueItem | None:
     result = await db.execute(
         select(PrintQueueItem)
@@ -95,7 +104,9 @@ async def _belongs(db, printer_id: int, item: PrintQueueItem, filename: str | No
 async def _close_archive_of_stopped_item(db, printer_id: int, event) -> None:
     dispatch = _dispatched.get(printer_id)
     if dispatch is None or (event.filename and event.filename != dispatch.printer_filename):
-        logger.info("Printer %s ended %r outside the farm queue", printer_id, event.filename)
+        logger.info(
+            "Printer %s ended %r (%s) outside the farm queue", printer_id, event.filename, describe_outcome(event)
+        )
         return
     item = await db.get(PrintQueueItem, dispatch.queue_item_id)
     forget_dispatch(printer_id)
@@ -151,7 +162,7 @@ async def _on_ended(printer_id: int, event) -> None:
                 "Printer %s ended %r (%s) outside the farm queue",
                 printer_id,
                 event.filename,
-                getattr(event.outcome, "value", event.outcome),
+                describe_outcome(event),
             )
             return
         now = datetime.now(timezone.utc)

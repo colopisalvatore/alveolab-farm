@@ -6,6 +6,7 @@ to ``provider_jobs`` directly, the database is the test engine.
 """
 
 import json
+import logging
 import zipfile
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
@@ -225,3 +226,13 @@ class TestJobEvents:
         row = await _reload(maker, type(archive), archive.id)
         assert row.status == "cancelled"
         assert row.failure_reason == "userCancelled"
+
+    async def test_print_outside_the_queue_logs_its_outcome(self, sessions, printer_factory, caplog):
+        printer = await printer_factory(name="Centauri 2", model="Centauri 2", provider="elegoo")
+        with caplog.at_level(logging.INFO, logger="backend.app.services.provider_jobs"):
+            await provider_jobs.on_provider_job_event(
+                printer.id, JobEvent("ended", "kawasaki.gcode", JobState.FINISHED, inferred=True, progress=99)
+            )
+            await provider_jobs.on_provider_job_event(printer.id, JobEvent("ended", "orca.gcode", JobState.CANCELLED))
+        assert "'kawasaki.gcode' (finished, inferred after 99%) outside the farm queue" in caplog.text
+        assert "'orca.gcode' (cancelled) outside the farm queue" in caplog.text

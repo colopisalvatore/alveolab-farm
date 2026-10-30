@@ -96,6 +96,8 @@ class Capability(StrEnum):
     # Multicolour / filament
     MULTICOLOR_STATUS = "multicolor_status"
     MULTICOLOR_SLOT_EDIT = "multicolor_slot_edit"
+    MULTICOLOR_AUTO_REFILL = "multicolor_auto_refill"
+    MULTICOLOR_LOAD_UNLOAD = "multicolor_load_unload"
     # Media
     CAMERA = "camera"
     # Bambuddy pipelines that are wired to the Bambu protocol today. Kept as
@@ -239,6 +241,7 @@ class NormalizedTelemetry:
     speed_percent: int | None = None
     faults: list[PrinterFault] = field(default_factory=list)
     multicolor_slots: list[MultiColorSlot] = field(default_factory=list)
+    multicolor_auto_refill: bool | None = None  # None = not reported
     firmware_version: str | None = None
     model: str | None = None
     updated_at: float = field(default_factory=time.time)

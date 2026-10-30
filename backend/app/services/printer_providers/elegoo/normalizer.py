@@ -302,9 +302,10 @@ def normalize_cc2_status(
             telemetry.fans_percent[name] = speed
 
     telemetry.faults = _faults(status)
-    telemetry.multicolor_slots = parse_canvas_slots(
-        canvas_info if canvas_info is not None else status.get("canvas_info")
-    )
+    canvas = canvas_info if canvas_info is not None else status.get("canvas_info")
+    telemetry.multicolor_slots = parse_canvas_slots(canvas)
+    if isinstance(canvas, dict) and isinstance(canvas.get("auto_refill"), bool):
+        telemetry.multicolor_auto_refill = canvas["auto_refill"]
     return telemetry
 
 

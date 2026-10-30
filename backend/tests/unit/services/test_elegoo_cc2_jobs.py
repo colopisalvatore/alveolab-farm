@@ -135,7 +135,7 @@ class AnsweringMQTT(FakeMQTT):
         info = super().publish(topic, payload, qos, retain)
         request = self.published[-1][1]
         self.qos.append((request.get("method"), qos))
-        if self.answer is not None and request.get("method") in p.JOB_METHODS:
+        if self.answer is not None and request.get("method") in p.JOB_METHODS | p.CANVAS_METHODS:
             result = self.answer(request)
             if result is not None:
                 self.client.handle_message(

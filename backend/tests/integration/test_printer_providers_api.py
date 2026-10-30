@@ -178,6 +178,22 @@ class _FakeJobClient:
         self.calls.append("stop")
         return self.outcome
 
+    def set_canvas_filament(self, canvas_id, tray_id, **kwargs):
+        self.calls.append(("slot", canvas_id, tray_id, kwargs))
+        return self.outcome
+
+    def set_canvas_auto_refill(self, enabled):
+        self.calls.append(("auto_refill", enabled))
+        return self.outcome
+
+    def load_canvas_filament(self, canvas_id, tray_id):
+        self.calls.append(("load", canvas_id, tray_id))
+        return self.outcome
+
+    def unload_canvas_filament(self, canvas_id, tray_id):
+        self.calls.append(("unload", canvas_id, tray_id))
+        return self.outcome
+
 
 @pytest.fixture
 def provider_client():
@@ -254,3 +270,85 @@ class TestProviderJobCommands:
         assert response.status_code == 400
         await db_session.refresh(item)
         assert item.status == "printing"
+
+
+class TestCanvasCommands:
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_catalogue(self, async_client: AsyncClient):
+        response = await async_client.get("/api/v1/printer-providers/elegoo/canvas-filaments")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["brands"] == ["ELEGOO", "Generic"]
+        assert {"name": "PLA Matte", "type": "PLA", "code": "0x0006"}.items() <= body["filaments"][6].items()
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_each_command_reaches_the_client(self, async_client: AsyncClient, printer_factory, provider_client):
+        from backend.app.services.printer_providers.elegoo.client import COMMAND_ACCEPTED, CommandOutcome
+
+        printer = await printer_factory(provider="elegoo", model="Centauri 2", access_code="")
+        client = provider_client(printer.id, CommandOutcome(COMMAND_ACCEPTED, 2003, 0))
+        base = f"/api/v1/printer-providers/printers/{printer.id}/canvas"
+        responses = [
+            await async_client.put(
+                f"{base}/0/slots/2", json={"filament_name": "PETG", "color": "#000000", "brand": "Generic"}
+            ),
+            await async_client.put(f"{base}/auto-refill", json={"enabled": True}),
+            await async_client.post(f"{base}/0/slots/2/load"),
+            await async_client.post(f"{base}/0/slots/2/unload"),
+        ]
+        assert [r.status_code for r in responses] == [200, 200, 200, 200]
+        assert client.calls == [
+            ("slot", 0, 2, {"filament_name": "PETG", "color": "#000000", "brand": "Generic"}),
+            ("auto_refill", True),
+            ("load", 0, 2),
+            ("unload", 0, 2),
+        ]
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_refusal_and_no_reply(self, async_client: AsyncClient, printer_factory, provider_client):
+        from backend.app.services.printer_providers.elegoo.client import (
+            COMMAND_NO_REPLY,
+            COMMAND_REFUSED,
+            CommandOutcome,
+        )
+
+        printer = await printer_factory(provider="elegoo", model="Centauri 2", access_code="")
+        base = f"/api/v1/printer-providers/printers/{printer.id}/canvas"
+        provider_client(
+            printer.id, CommandOutcome(COMMAND_REFUSED, 2001, message="not possible while the printer is printing")
+        )
+        response = await async_client.post(f"{base}/0/slots/0/load")
+        assert response.status_code == 409
+        assert "printing" in response.json()["detail"]["message"]
+        provider_client(printer.id, CommandOutcome(COMMAND_NO_REPLY, 2002))
+        response = await async_client.post(f"{base}/0/slots/0/unload")
+        assert response.status_code == 504
+        assert response.json()["detail"]["code"] == "no_reply"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_bad_colour_never_reaches_the_printer(
+        self, async_client: AsyncClient, printer_factory, provider_client
+    ):
+        from backend.app.services.printer_providers.elegoo.client import COMMAND_ACCEPTED, CommandOutcome
+
+        printer = await printer_factory(provider="elegoo", model="Centauri 2", access_code="")
+        client = provider_client(printer.id, CommandOutcome(COMMAND_ACCEPTED, 2003, 0))
+        response = await async_client.put(
+            f"/api/v1/printer-providers/printers/{printer.id}/canvas/0/slots/0",
+            json={"filament_name": "PLA", "color": "red"},
+        )
+        assert response.status_code == 422
+        assert client.calls == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_not_connected(self, async_client: AsyncClient, printer_factory):
+        printer = await printer_factory(provider="elegoo", model="Centauri 2", access_code="")
+        response = await async_client.put(
+            f"/api/v1/printer-providers/printers/{printer.id}/canvas/auto-refill", json={"enabled": False}
+        )
+        assert response.status_code == 400

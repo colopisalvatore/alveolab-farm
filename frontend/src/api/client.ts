@@ -484,7 +484,31 @@ export interface PrinterTelemetry {
   job_state: string;
   firmware_version?: string | null;
   multicolor_slots?: MultiColorSlot[];
+  /** CANVAS auto-refill as the printer reports it; null/absent = not reported. */
+  multicolor_auto_refill?: boolean | null;
   faults?: PrinterFault[];
+}
+
+/** A filament a CANVAS slot can be set to (ELEGOO's own table, backend elegoo/canvas.py). */
+export interface CanvasFilament {
+  name: string;
+  type: string;
+  code: string;
+  min_temp: number;
+  max_temp: number;
+  elegoo: boolean;
+  generic: boolean;
+}
+
+export interface CanvasFilamentCatalogue {
+  brands: string[];
+  filaments: CanvasFilament[];
+}
+
+export interface CanvasSlotUpdate {
+  filament_name: string;
+  color: string; // "#RRGGBB"
+  brand: string;
 }
 
 export interface ElegooDiscoveredPrinter {
@@ -4950,6 +4974,26 @@ export const api = {
     request<PrinterCapabilities>(`/printer-providers/printers/${id}/capabilities`),
   getPrinterTelemetry: (id: number) =>
     request<PrinterTelemetry>(`/printer-providers/printers/${id}/telemetry`),
+  getCanvasFilaments: () => request<CanvasFilamentCatalogue>('/printer-providers/elegoo/canvas-filaments'),
+  setCanvasSlot: (printerId: number, canvasId: number, trayId: number, data: CanvasSlotUpdate) =>
+    request<{ success: boolean }>(`/printer-providers/printers/${printerId}/canvas/${canvasId}/slots/${trayId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  loadCanvasSlot: (printerId: number, canvasId: number, trayId: number) =>
+    request<{ success: boolean }>(`/printer-providers/printers/${printerId}/canvas/${canvasId}/slots/${trayId}/load`, {
+      method: 'POST',
+    }),
+  unloadCanvasSlot: (printerId: number, canvasId: number, trayId: number) =>
+    request<{ success: boolean }>(
+      `/printer-providers/printers/${printerId}/canvas/${canvasId}/slots/${trayId}/unload`,
+      { method: 'POST' },
+    ),
+  setCanvasAutoRefill: (printerId: number, enabled: boolean) =>
+    request<{ success: boolean }>(`/printer-providers/printers/${printerId}/canvas/auto-refill`, {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }),
   discoverElegooPrinters: (targets: string[] = [], timeout: number = 5) =>
     request<ElegooDiscoveredPrinter[]>('/printer-providers/elegoo/discover', {
       method: 'POST',

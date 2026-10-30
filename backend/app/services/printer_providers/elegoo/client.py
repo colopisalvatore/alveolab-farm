@@ -55,7 +55,7 @@ from backend.app.services.printer_providers.base import (
     NormalizedTelemetry,
     PrinterProvider,
 )
-from backend.app.services.printer_providers.elegoo import protocol as p
+from backend.app.services.printer_providers.elegoo import canvas as cv, protocol as p
 from backend.app.services.printer_providers.elegoo.capabilities import elegoo_capabilities
 from backend.app.services.printer_providers.elegoo.normalizer import apply_to_printer_state, normalize_cc2_status
 
@@ -82,6 +82,8 @@ COMMAND_REFUSED = "refused"  # refused by the farm before sending
 # Job states from which a new print may be started: the machine is idle or
 # shows the end of the previous job.
 STARTABLE_STATES = frozenset({JobState.IDLE, JobState.FINISHED, JobState.CANCELLED, JobState.FAILED})
+# ELEGOO's page allows a CANVAS load / unload when idle or paused.
+LOAD_UNLOAD_STATES = STARTABLE_STATES | {JobState.PAUSED}
 _TERMINAL_STATES = frozenset({JobState.FINISHED, JobState.CANCELLED, JobState.FAILED})
 # Progress from which a print that goes back to idle without a terminal
 # sub-status counts as finished. Our CC2 (fw 02.01.01.04, 29/10/2026) went
@@ -358,9 +360,9 @@ class ElegooCC2Client:
     # --- Job commands (M4) -------------------------------------------------------
 
     def _send_job_command(
-        self, method: int, params: dict | None = None, timeout: float | None = None
+        self, method: int, params: dict | None = None, timeout: float | None = None, build=p.build_job_request
     ) -> CommandOutcome:
-        """Publish one job command (QoS 0, never re-sent) and wait for its reply."""
+        """Publish one job (or, with *build*, CANVAS) command (QoS 0, never re-sent) and wait for its reply."""
         with self._lock:
             client = self._client
             if client is None or not self._registered or self._connection is not ConnectionStatus.ONLINE:
@@ -369,7 +371,7 @@ class ElegooCC2Client:
             pending = _PendingCommand(method)
             self._pending[request_id] = pending
         try:
-            message = p.build_job_request(request_id, method, params)
+            message = build(request_id, method, params)
             try:
                 info = client.publish(self.topics.api_request, message, qos=0, retain=False)
             except Exception as exc:
@@ -455,6 +457,74 @@ class ElegooCC2Client:
         refusal = self._refuse_unless(Capability.JOB_STOP, method, ACTIVE_JOB_STATES)
         return refusal or self._send_job_command(method)
 
+    # --- CANVAS commands (M5) ------------------------------------------------------
+
+    def _send_canvas_command(self, method: int, params: dict, timeout: float | None = None) -> CommandOutcome:
+        outcome = self._send_job_command(method, params, timeout, build=p.build_canvas_request)
+        if outcome.status == COMMAND_ACCEPTED:
+            # The new slot data / auto-refill flag comes back in 2005.
+            self.request(p.METHOD_GET_CANVAS_STATUS)
+        return outcome
+
+    def _canvas_tray(self, method: int, canvas_id: int, tray_id: int) -> tuple[dict | None, CommandOutcome | None]:
+        with self._lock:
+            tray = cv.find_tray(self._canvas_info, canvas_id, tray_id)
+        if tray is None:
+            return None, CommandOutcome(
+                COMMAND_REFUSED, method, message=f"CANVAS {canvas_id} slot {tray_id} not reported by the printer"
+            )
+        return tray, None
+
+    def set_canvas_filament(
+        self, canvas_id: int, tray_id: int, *, filament_name: str, color: str, brand: str
+    ) -> CommandOutcome:
+        """Declare what spool sits in a CANVAS slot (2003). Printer idle only, like ELEGOO's page."""
+        method = p.METHOD_SET_FILAMENT_INFO
+        try:
+            params = cv.filament_info_params(canvas_id, tray_id, filament_name=filament_name, color=color, brand=brand)
+        except ValueError as exc:
+            return CommandOutcome(COMMAND_REFUSED, method, message=str(exc))
+        refusal = self._refuse_unless(Capability.MULTICOLOR_SLOT_EDIT, method, STARTABLE_STATES)
+        if refusal is None:
+            _, refusal = self._canvas_tray(method, canvas_id, tray_id)
+        return refusal or self._send_canvas_command(method, params)
+
+    def set_canvas_auto_refill(self, enabled: bool) -> CommandOutcome:
+        """Switch to another slot with the same filament when one runs out (2004)."""
+        method = p.METHOD_SET_AUTO_REFILL
+        known_states = frozenset(JobState) - {JobState.UNKNOWN}
+        refusal = self._refuse_unless(Capability.MULTICOLOR_AUTO_REFILL, method, known_states)
+        if refusal is None:
+            with self._lock:
+                has_canvas = bool((self._canvas_info or {}).get("canvas_list"))
+            if not has_canvas:
+                refusal = CommandOutcome(COMMAND_REFUSED, method, message="no CANVAS reported by the printer")
+        return refusal or self._send_canvas_command(method, cv.auto_refill_params(enabled))
+
+    def load_canvas_filament(self, canvas_id: int, tray_id: int) -> CommandOutcome:
+        """Feed the filament of a slot to the nozzle (2001). Idle or paused, recognised spool only."""
+        method = p.METHOD_LOAD_FILAMENT
+        refusal = self._refuse_unless(Capability.MULTICOLOR_LOAD_UNLOAD, method, LOAD_UNLOAD_STATES)
+        if refusal is None:
+            tray, refusal = self._canvas_tray(method, canvas_id, tray_id)
+            if refusal is None and not cv.tray_recognised(tray):
+                refusal = CommandOutcome(
+                    COMMAND_REFUSED, method, message="the slot is empty or its filament is not set"
+                )
+        return refusal or self._send_canvas_command(
+            method, cv.tray_params(canvas_id, tray_id), cv.LOAD_UNLOAD_TIMEOUT_SECONDS
+        )
+
+    def unload_canvas_filament(self, canvas_id: int, tray_id: int) -> CommandOutcome:
+        """Pull the filament of a slot back from the nozzle (2002). Idle or paused."""
+        method = p.METHOD_UNLOAD_FILAMENT
+        refusal = self._refuse_unless(Capability.MULTICOLOR_LOAD_UNLOAD, method, LOAD_UNLOAD_STATES)
+        if refusal is None:
+            _, refusal = self._canvas_tray(method, canvas_id, tray_id)
+        return refusal or self._send_canvas_command(
+            method, cv.tray_params(canvas_id, tray_id), cv.LOAD_UNLOAD_TIMEOUT_SECONDS
+        )
+
     # --- paho callbacks (network thread) ----------------------------------------
 
     def _on_connect(self, client, userdata, flags, reason_code, properties=None):
@@ -524,7 +594,7 @@ class ElegooCC2Client:
                 pending.reply = result
                 pending.event.set()
                 return
-        if method in p.JOB_METHODS:
+        if method in p.JOB_METHODS or method in p.CANVAS_METHODS:
             return  # a late reply to a command we stopped waiting for
         error_code = result.get("error_code")
         if isinstance(error_code, int) and error_code != 0 and method in (p.METHOD_GET_STATUS, p.METHOD_GET_ATTRIBUTES):

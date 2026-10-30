@@ -5298,9 +5298,17 @@ function PrinterCard({
               );
             })()}
 
-            {/* ALVEOLAB Farm: ELEGOO CANVAS, read-only, from the provider telemetry */}
+            {/* ALVEOLAB Farm: ELEGOO CANVAS from the provider telemetry; its commands only with their capabilities (M5) */}
             {viewMode === 'expanded' && !printerProvider.isBambu && printerProvider.can(Capability.MULTICOLOR_STATUS) && (
-              <CanvasPanel slots={printerProvider.telemetry?.multicolor_slots} />
+              <CanvasPanel
+                slots={printerProvider.telemetry?.multicolor_slots}
+                printerId={printer.id}
+                autoRefill={printerProvider.telemetry?.multicolor_auto_refill}
+                jobState={printerProvider.telemetry?.job_state}
+                connected={!!status?.connected}
+                can={printerProvider.can}
+                canControl={hasPermission('printers:control')}
+              />
             )}
 
             {/* AMS Units - 2-Column Grid Layout */}

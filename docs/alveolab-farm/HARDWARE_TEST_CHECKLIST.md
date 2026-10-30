@@ -53,6 +53,15 @@ Legenda rischio: 🟢 sola lettura · 🟡 cambia stato non distruttivo · 🔴 
 | HW-M5-04 | 🟢 | Significato `status` 1 vs 2 | Annotare (precaricato/caricato vs presente/attivo) | ✅ 29/10: `status` 1 = presente, non caricata (campi vuoti); 2 = caricata (`active_tray_id` = quello slot). |
 | HW-M5-05 | 🔴 | Stampa 2 colori con `slot_map` (`t` vs `slot`) | Colori corretti | |
 
+**Comandi CANVAS dalla farm (M5, 30/10).** Si accendono come le voci M4, una capability alla volta in `ALVEOLAB_ELEGOO_ENABLE`. Stampante ferma, operatore davanti. Ordine proposto: 06 → 07 → 08 → 09.
+
+| ID | Rischio | Test | Atteso | Esito |
+|---|---|---|---|---|
+| HW-M5-06 | 🟡 | `multicolor_slot_edit`: dalla card, slot 1 → Generic, PLA Matte, colore blu (metodo 2003) | `error_code 0`; touchscreen e `GET …/telemetry` mostrano PLA Matte blu; nessun movimento | |
+| HW-M5-07 | 🟢 | `multicolor_auto_refill`: interruttore acceso e spento (2004 `{auto_refill}`) | Il flag cambia anche sul touchscreen; `multicolor_auto_refill` segue | |
+| HW-M5-08 | 🔴 | `multicolor_load_unload`: carica dallo slot 1 (2001) con stampante ferma | Il filamento arriva all'ugello; risposta entro 5 min; `active_tray_id` = slot 1 | |
+| HW-M5-09 | 🔴 | Scarica lo slot caricato (2002) | Il filamento torna nel CANVAS; nessun errore sul touchscreen | |
+
 ## M2 — Prima connessione: procedura consigliata
 
 1. Discovery broadcast (HW-M2-01). Se la farm gira in Docker bridge, usare `targets` con l'IP.

@@ -73,7 +73,9 @@ Tabella `COMMAND_MAPPING_TABLE`, `elegoo_fdm_cc2_message_adapter.cpp:1391-1423`.
 | 1036–1048 | task/file list/detail/delete/disk | commentati | non previsti (eventuale M4 dopo verifica) |
 | 1043 | rinomina | attivo | non usato |
 | 1057 / 1058 | download file da URL / annulla | attivi | valutare in M4 |
-| 2004 | auto-refill | attivo | non usato |
+| 2001 / 2002 | carica / scarica filamento CANVAS | **assenti** (1024/1025 commentati sono un'altra cosa) | M5, `canvas.py`, dopo HW-M5-08/09 |
+| 2003 | modifica dati slot CANVAS | **assente** | M5, `canvas.py`, dopo HW-M5-06 |
+| 2004 | auto-refill | attivo | M5 `{auto_refill}`, dopo HW-M5-07 |
 | 6000 / 6008 | push stato (delta) / attributi | eventi | gestiti |
 
 Envelope richiesta `{"id","method","params"}`, id da contatore che parte da 100000 (`message_adapter.cpp:44-51`). Esito: `result.error_code == 0`. Codici errore: tabella in `protocol.ERROR_CODES` (adapter 1427-1474: 1000 token, 1003 parametro, 1009 occupata, 1010 non in stampa, 109 filamento esaurito, 1021 file non trovato, 1026 manca livellamento, 9000-9009 upload, …).
@@ -106,7 +108,22 @@ Mappatura sub-stati di stampa → `JobState`: vedi `normalizer.job_state_from_ma
 1. `tray_id`: SDK dice 1-4 (0 = nessuno), esempio reale community 0-3. → ALVEOLAB Farm **non rinumera**: conserva l'id così com'è.
 2. `status` del tray: SDK 0 vuoto / 1 precaricato / 2 caricato; community 1 presente / 2 attivo. → Solo `0 = vuoto` è certo; "attivo" si ricava da `active_canvas_id`/`active_tray_id`.
 3. **Rilevato vs dichiarato: non esposto da nessuna fonte** (nessun RFID/flag). → `MultiColorSlot.source = unknown`. Nessuna simulazione: in M5 l'associazione bobina-slot sarà **manuale** in UI, con avviso.
-4. Nessun metodo per modificare i dati di uno slot nell'SDK → capability `multicolor_slot_edit` assente.
+4. ~~Nessun metodo per modificare i dati di uno slot~~ → **esiste (30/10/2026)**, vedi §6.1.
+
+### 6.1 Comandi CANVAS della pagina ELEGOO in Orca Slicer (M5)
+
+L'SDK non li elenca, ma la pagina "Dispositivo" di ELEGOO inclusa in Orca Slicer 2.4.3 (`resources/web/elegoolink/lan_service_web/index.html`, enum `Pt`) li usa sulla stessa API MQTT. Fonte di ELEGOO, quindi più affidabile della documentazione community; non ancora provati sulla nostra macchina.
+
+| Metodo | Nome nella pagina | `params` |
+|---|---|---|
+| 2001 | `LoadFilamenting` | `{canvas_id, tray_id}`; la pagina aspetta la risposta fino a 5 min |
+| 2002 | `UnloadFilamenting` | `{canvas_id, tray_id}`; idem |
+| 2003 | `SetFilamentInfo` | `{canvas_id, tray_id, brand, filament_type, filament_name, filament_code, filament_color, filament_min_temp, filament_max_temp}` |
+| 2004 | `SetAutoFillFilament` | `{auto_refill: bool}` (non `{"enable"}` come scrive la doc community) |
+
+- Tipo, codice e temperature vengono da una tabella di 50 filamenti della pagina (`Ud`, es. "PLA Matte" → PLA, `0x0006`, 190-230 °C). In ALVEOLAB Farm: `CANVAS_FILAMENTS` in `elegoo/canvas.py`. Brand offerti: `ELEGOO` (solo filamenti con `elegoo: true`) e `Generic`.
+- Quando la pagina li permette: modifica solo a stampante ferma (`editBtnDisabled`); carico a stampante ferma o in pausa, da uno slot con tipo e colore noti e non vuoto (`feedBtnDisabled`). La farm applica le stesse regole e in più rifiuta uno slot che la stampante non ha riportato.
+- La stessa pagina usa anche 1024/1025 (`Feed`/`Retreat`, estrusore), 1055/1061 (filamento senza CANVAS) e 1032-1035 (calibrazioni): non usati.
 
 ## 7. Upload file e comandi di lavoro (M4, implementati 30/10, da provare su hardware)
 

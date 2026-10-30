@@ -58,6 +58,14 @@ METHOD_STOP_PRINT = 1022
 # integration sends it with empty params (HA cc2/const.py:51). Only used once
 # HW-M4-05 has shown our firmware accepts it.
 METHOD_RESUME_PRINT = 1023
+# CANVAS commands (M5). Missing from the SDK's table except 2004, but sent by
+# ELEGOO's own device page bundled with Orca Slicer 2.4.3
+# (resources/web/elegoolink/lan_service_web/index.html, enum ``Pt``):
+# 2001 LoadFilamenting, 2002 UnloadFilamenting, 2003 SetFilamentInfo,
+# 2004 SetAutoFillFilament. Payloads in ``elegoo/canvas.py``.
+METHOD_LOAD_FILAMENT = 2001
+METHOD_UNLOAD_FILAMENT = 2002
+METHOD_SET_FILAMENT_INFO = 2003
 METHOD_SET_AUTO_REFILL = 2004
 METHOD_GET_CANVAS_STATUS = 2005
 METHOD_ON_STATUS = 6000  # push, delta
@@ -70,6 +78,11 @@ READ_ONLY_METHODS = frozenset({METHOD_GET_ATTRIBUTES, METHOD_GET_STATUS, METHOD_
 # never send one by passing the wrong number; each is further gated by a
 # capability that is only switched on after its hardware test.
 JOB_METHODS = frozenset({METHOD_START_PRINT, METHOD_PAUSE_PRINT, METHOD_STOP_PRINT, METHOD_RESUME_PRINT})
+# CANVAS commands (M5): same rules as job commands, separate set so neither
+# builder can send the other's methods.
+CANVAS_METHODS = frozenset(
+    {METHOD_LOAD_FILAMENT, METHOD_UNLOAD_FILAMENT, METHOD_SET_FILAMENT_INFO, METHOD_SET_AUTO_REFILL}
+)
 
 # --- File upload (HTTP) ------------------------------------------------------
 # PUT http://<ip>/upload, raw body in chunks of at most 1 MiB, MD5 of the whole
@@ -266,6 +279,13 @@ def build_job_request(request_id: int, method: int, params: dict | None = None) 
     """Envelope of a job command (start / pause / stop / resume). Nothing else."""
     if method not in JOB_METHODS:
         raise PermissionError(f"CC2 method {method} is not a job command")
+    return json.dumps({"id": request_id, "method": method, "params": params or {}})
+
+
+def build_canvas_request(request_id: int, method: int, params: dict | None = None) -> str:
+    """Envelope of a CANVAS command (load / unload / slot edit / auto-refill). Nothing else."""
+    if method not in CANVAS_METHODS:
+        raise PermissionError(f"CC2 method {method} is not a CANVAS command")
     return json.dumps({"id": request_id, "method": method, "params": params or {}})
 
 

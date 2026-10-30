@@ -18,6 +18,9 @@ export const Capability = {
   JOB_PAUSE_RESUME: 'job_pause_resume',
   JOB_STOP: 'job_stop',
   MULTICOLOR_STATUS: 'multicolor_status',
+  MULTICOLOR_SLOT_EDIT: 'multicolor_slot_edit',
+  MULTICOLOR_AUTO_REFILL: 'multicolor_auto_refill',
+  MULTICOLOR_LOAD_UNLOAD: 'multicolor_load_unload',
   AMS_MANAGEMENT: 'ams_management',
 } as const;
 
