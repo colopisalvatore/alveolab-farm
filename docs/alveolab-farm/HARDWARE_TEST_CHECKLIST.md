@@ -31,6 +31,8 @@ Legenda rischio: 🟢 sola lettura · 🟡 cambia stato non distruttivo · 🔴 
 
 ## M4 — Controllo lavori e upload (richiede autorizzazione per ogni voce)
 
+**Come si esegue una voce.** Sul CT 100, in `/opt/alveolab-farm/deploy/alveolab-farm/.env`, si aggiunge la capability della voce a `ALVEOLAB_ELEGOO_ENABLE` (es. `ALVEOLAB_ELEGOO_ENABLE=file_upload`), poi `docker compose -f deploy/alveolab-farm/docker-compose.yml up -d`. Piatto libero, operatore davanti alla stampante. Se la voce fallisce, si toglie la capability e si riavvia: la Centauri torna in sola lettura. Ordine proposto: 01 → 04 → 05 → 06 → 07, poi 03.
+
 | ID | Rischio | Test | Atteso | Esito |
 |---|---|---|---|---|
 | HW-M4-01 | 🟡 | Upload file `.gcode` piccolo (profilo CC2) via `PUT /upload` | `error_code 0`; file visibile sul touchscreen; MD5 accettato | |

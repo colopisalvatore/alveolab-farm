@@ -203,7 +203,9 @@ import { usePrinterProvider } from '../components/printer-providers/usePrinterPr
 import { Capability, isBambuPrinter } from '../components/printer-providers/capabilities';
 import { CanvasPanel } from '../components/printer-providers/CanvasPanel';
 import { ProviderFaultsBadge } from '../components/printer-providers/ProviderFaultsBadge';
-import { ProviderPicker, ProviderReadOnlyNotice } from '../components/printer-providers/ProviderPicker';
+import { ProviderJobControls } from '../components/printer-providers/ProviderJobControls';
+import { ElegooPrintModal } from '../components/printer-providers/ElegooPrintModal';
+import { ProviderPicker } from '../components/printer-providers/ProviderPicker';
 import { ElegooAddPrinterModal } from '../components/printer-providers/ElegooAddPrinterModal';
 import type { PrinterProviderId } from '../api/client';
 import { Collapsible } from '../components/Collapsible';
@@ -2150,6 +2152,7 @@ function PrinterCard({
     });
   }, [printer.id]);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [showProviderPrint, setShowProviderPrint] = useState(false);
   const [showPauseConfirm, setShowPauseConfirm] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState<number | null>(null);
   const [showAirductMenu, setShowAirductMenu] = useState<number | null>(null);
@@ -3517,7 +3520,9 @@ function PrinterCard({
   // used to check — so someone holding that but neither of these had the file
   // uploaded and then rejected by the queue, leaving it stranded. The Print
   // button below has always checked this pair.
-  const providerCanDispatch = printerProvider.can(Capability.QUEUE_DISPATCH);
+  // The upload-and-print flow and the print dialog are Bambu flows (FTPS, AMS);
+  // a non-Bambu printer prints from its own controls (ProviderJobControls).
+  const providerCanDispatch = printerProvider.isBambu && printerProvider.can(Capability.QUEUE_DISPATCH);
   const canDrop = providerCanDispatch && hasPermission('library:upload') && hasPermission('queue:create');
 
   // Drives the wording alone. Shared with the PrintModal so the card's promise
@@ -4877,8 +4882,21 @@ function PrinterCard({
 
             {viewMode === 'expanded' && showClearPlateButton && expandedClearPlateButton}
 
-            {/* ALVEOLAB Farm: no job or machine control for non-Bambu printers yet (M4). */}
-            {viewMode === 'expanded' && !printerProvider.isBambu && <ProviderReadOnlyNotice />}
+            {/* ALVEOLAB Farm: non-Bambu printers get only the job controls their provider declares (M4). */}
+            {viewMode === 'expanded' && !printerProvider.isBambu && (
+              <ProviderJobControls
+                state={status.state}
+                connected={status.connected}
+                can={printerProvider.can}
+                canControl={hasPermission('printers:control')}
+                canQueue={hasPermission('queue:create')}
+                busy={stopPrintMutation.isPending || pausePrintMutation.isPending || resumePrintMutation.isPending}
+                onPause={() => setShowPauseConfirm(true)}
+                onResume={() => setShowResumeConfirm(true)}
+                onStop={() => setShowStopConfirm(true)}
+                onPrint={() => setShowProviderPrint(true)}
+              />
+            )}
 
             {/* Controls */}
             {viewMode === 'expanded' && printerProvider.isBambu && (() => {
@@ -7199,6 +7217,8 @@ function PrinterCard({
           onCancel={() => setHaToggleConfirm(null)}
         />
       )}
+
+      {showProviderPrint && <ElegooPrintModal printer={printer} onClose={() => setShowProviderPrint(false)} />}
 
       {/* Stop Print Confirmation */}
       {showStopConfirm && (

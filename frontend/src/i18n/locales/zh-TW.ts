@@ -7977,6 +7977,13 @@ export default {
     faultsTitle: '印表機回報的錯誤：',
     faultsNone: '印表機未回報錯誤',
     bulkSkipped: '已略過其他品牌的印表機（僅監控）：{{count}}',
+    printFile: '列印檔案',
+    printFileTitle: '在 {{name}} 上列印',
+    printFileHint: '為 Centauri 2 切片的資料庫檔案（來自 OrcaSlicer 或 ElegooSlicer 的 .gcode）。工作在佇列中等待，直到印表機空閒且確認列印板已清空。',
+    printFileNone: '資料庫中沒有為 Centauri 2 切片的檔案。請使用 Centauri 2 設定檔切片，匯出 G-code 並在檔案中上傳。',
+    levelBeforePrint: '列印前調平熱床',
+    addToQueue: '加入佇列',
+    printQueued: '已加入 {{name}} 的佇列：印表機空閒後開始',
     connectError: {
       register_timeout: '印表機未回應：請在觸控螢幕上開啟 LAN Only 模式。未新增印表機。',
       auth_failed: '印表機拒絕了存取碼。未新增印表機。',

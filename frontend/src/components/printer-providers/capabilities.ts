@@ -13,6 +13,8 @@ export const Capability = {
   CAMERA: 'camera',
   FILE_LIST: 'file_list',
   QUEUE_DISPATCH: 'queue_dispatch',
+  JOB_START: 'job_start',
+  FILE_UPLOAD: 'file_upload',
   JOB_PAUSE_RESUME: 'job_pause_resume',
   JOB_STOP: 'job_stop',
   MULTICOLOR_STATUS: 'multicolor_status',
@@ -46,4 +48,9 @@ export function providerAllows(
 ): boolean {
   if (isBambuPrinter(printer)) return true;
   return capabilities?.supported.includes(capability) ?? false;
+}
+
+/** True when a library file says it was sliced for an ELEGOO Centauri 2 (the backend re-checks the file itself). */
+export function isSlicedForCentauri2(slicedForModel: string | null | undefined): boolean {
+  return /centauri( carbon)? 2/i.test(slicedForModel ?? '');
 }

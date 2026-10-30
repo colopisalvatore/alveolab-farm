@@ -36,7 +36,20 @@ __all__ = [
     "capabilities_for",
     "create_provider_client",
     "parse_provider",
+    "provider_job_client",
 ]
+
+
+def provider_job_client(manager, printer_id: int):
+    """The client of a connected non-Bambu printer, or None.
+
+    Only a provider the manager has really recorded counts: anything else
+    (a Bambu printer, a disconnected one) leaves the caller on the Bambu path.
+    """
+    provider = manager.get_provider(printer_id)
+    if not isinstance(provider, PrinterProvider) or provider is PrinterProvider.BAMBU:
+        return None
+    return manager.get_provider_client(printer_id)
 
 
 def capabilities_for(provider: PrinterProvider | str | None, model: str | None) -> CapabilitySet:
@@ -58,6 +71,7 @@ def create_provider_client(
     printer: Printer,
     *,
     on_state_change: Callable[[PrinterState], None] | None = None,
+    on_job_event: Callable[[object], None] | None = None,
 ) -> PrinterProviderClient:
     """Build the client of a non-Bambu printer row (not yet connected)."""
     if provider is PrinterProvider.ELEGOO:
@@ -69,5 +83,6 @@ def create_provider_client(
             access_code=printer.access_code or None,
             model=printer.model,
             on_state_change=on_state_change,
+            on_job_event=on_job_event,
         )
     raise ValueError(f"Provider {provider!r} has no runtime client (Bambu printers use BambuMQTTClient)")

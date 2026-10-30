@@ -8045,6 +8045,13 @@ export default {
     faultsTitle: 'Errors reported by the printer:',
     faultsNone: 'No errors reported by the printer',
     bulkSkipped: 'Skipped printers of other brands (monitoring only): {{count}}',
+    printFile: 'Print a file',
+    printFileTitle: 'Print on {{name}}',
+    printFileHint: 'Library files sliced for the Centauri 2 (.gcode from OrcaSlicer or ElegooSlicer). The job waits in the queue until the printer is free and the plate is confirmed clear.',
+    printFileNone: 'No file sliced for the Centauri 2 in the library. Slice it with the Centauri 2 profile, export the G-code and upload it in Files.',
+    levelBeforePrint: 'Level the bed before printing',
+    addToQueue: 'Add to queue',
+    printQueued: 'Queued on {{name}}: it starts when the printer is free',
     connectError: {
       register_timeout: 'The printer did not answer: turn on LAN Only Mode from its touchscreen. The printer was not added.',
       auth_failed: 'Access code rejected by the printer. The printer was not added.',

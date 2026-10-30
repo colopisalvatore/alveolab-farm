@@ -410,6 +410,8 @@ class PrinterManager:
         self._last_trays: dict[int, dict] = {}
         self._on_print_start: Callable[[int, dict], None] | None = None
         self._on_print_complete: Callable[[int, dict], None] | None = None
+        # ALVEOLAB Farm: start / end of a print on a non-Bambu printer (M4).
+        self._on_provider_job_event: Callable[[int, object], None] | None = None
         self._on_print_running_observed: Callable[[int, dict], None] | None = None
         self._on_finish_photo_moment: Callable[[int, dict], None] | None = None
         self._on_status_change: Callable[[int, PrinterState], None] | None = None
@@ -623,6 +625,10 @@ class PrinterManager:
     def set_print_start_callback(self, callback: Callable[[int, dict], None]):
         """Set callback for print start events."""
         self._on_print_start = callback
+
+    def set_provider_job_event_callback(self, callback: Callable[[int, object], None]):
+        """Async callback for print start / end on non-Bambu printers (``JobEvent``)."""
+        self._on_provider_job_event = callback
 
     def set_print_complete_callback(self, callback: Callable[[int, dict], None]):
         """Set callback for print completion events."""
@@ -848,10 +854,9 @@ class PrinterManager:
     async def _connect_provider_printer(self, printer: Printer, provider: PrinterProvider) -> bool:
         """Connect a non-Bambu printer through the provider layer.
 
-        Only the status-change callback is wired: print start/complete events
-        feed the archive and queue pipelines, which are still Bambu-only (they
-        fetch the 3MF over FTPS). Those are connected per provider once its job
-        handling exists — see docs/alveolab-farm/IMPLEMENTATION_PLAN.md (M4).
+        The Bambu print start/complete callbacks are not wired: they fetch the
+        3MF over FTPS. A provider reports its own job events instead, handled by
+        ``services/provider_jobs.py`` (M4).
         """
         from backend.app.services.printer_providers import create_provider_client
 
@@ -861,7 +866,11 @@ class PrinterManager:
             if self._on_status_change:
                 self._schedule_async(self._on_status_change(printer_id, state))
 
-        client = create_provider_client(provider, printer, on_state_change=on_state_change)
+        def on_job_event(event):
+            if self._on_provider_job_event:
+                self._schedule_async(self._on_provider_job_event(printer_id, event))
+
+        client = create_provider_client(provider, printer, on_state_change=on_state_change, on_job_event=on_job_event)
         client.connect()
         self._provider_clients[printer_id] = client
         self._providers[printer_id] = provider

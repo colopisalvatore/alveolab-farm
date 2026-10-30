@@ -7994,6 +7994,13 @@ export default {
     faultsTitle: 'Vom Drucker gemeldete Fehler:',
     faultsNone: 'Keine Fehler vom Drucker gemeldet',
     bulkSkipped: 'Übersprungene Drucker anderer Marken (nur Überwachung): {{count}}',
+    printFile: 'Datei drucken',
+    printFileTitle: 'Drucken auf {{name}}',
+    printFileHint: 'Bibliotheksdateien, die für den Centauri 2 geslict wurden (.gcode aus OrcaSlicer oder ElegooSlicer). Der Auftrag wartet in der Warteschlange, bis der Drucker frei ist und die Platte als leer bestätigt wurde.',
+    printFileNone: 'Keine für den Centauri 2 geslicte Datei in der Bibliothek. Mit dem Centauri-2-Profil slicen, G-Code exportieren und unter Dateien hochladen.',
+    levelBeforePrint: 'Bett vor dem Druck nivellieren',
+    addToQueue: 'Zur Warteschlange hinzufügen',
+    printQueued: 'In der Warteschlange auf {{name}}: startet, sobald der Drucker frei ist',
     connectError: {
       register_timeout: 'Der Drucker hat nicht geantwortet: Schalten Sie den LAN-Only-Modus am Touchscreen ein. Der Drucker wurde nicht hinzugefügt.',
       auth_failed: 'Zugangscode vom Drucker abgelehnt. Der Drucker wurde nicht hinzugefügt.',

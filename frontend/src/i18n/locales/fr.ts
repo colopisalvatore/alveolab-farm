@@ -7980,6 +7980,13 @@ export default {
     faultsTitle: 'Erreurs signalées par l’imprimante :',
     faultsNone: 'Aucune erreur signalée par l’imprimante',
     bulkSkipped: 'Imprimantes d’autres marques ignorées (surveillance uniquement) : {{count}}',
+    printFile: 'Imprimer un fichier',
+    printFileTitle: 'Imprimer sur {{name}}',
+    printFileHint: 'Fichiers de la bibliothèque tranchés pour la Centauri 2 (.gcode d’OrcaSlicer ou ElegooSlicer). La tâche attend dans la file jusqu’à ce que l’imprimante soit libre et le plateau confirmé vide.',
+    printFileNone: 'Aucun fichier tranché pour la Centauri 2 dans la bibliothèque. Tranchez-le avec le profil Centauri 2, exportez le G-code et importez-le dans Fichiers.',
+    levelBeforePrint: 'Niveler le plateau avant l’impression',
+    addToQueue: 'Ajouter à la file',
+    printQueued: 'En file sur {{name}} : démarre dès que l’imprimante est libre',
     connectError: {
       register_timeout: 'L\'imprimante n\'a pas répondu : activez le mode LAN Only depuis son écran tactile. L\'imprimante n\'a pas été ajoutée.',
       auth_failed: 'Code d\'accès refusé par l\'imprimante. L\'imprimante n\'a pas été ajoutée.',

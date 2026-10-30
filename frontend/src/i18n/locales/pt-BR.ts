@@ -7979,6 +7979,13 @@ export default {
     faultsTitle: 'Erros informados pela impressora:',
     faultsNone: 'Nenhum erro informado pela impressora',
     bulkSkipped: 'Impressoras de outras marcas ignoradas (somente monitoramento): {{count}}',
+    printFile: 'Imprimir um arquivo',
+    printFileTitle: 'Imprimir em {{name}}',
+    printFileHint: 'Arquivos da biblioteca fatiados para a Centauri 2 (.gcode do OrcaSlicer ou ElegooSlicer). O trabalho espera na fila até a impressora estar livre e a mesa confirmada vazia.',
+    printFileNone: 'Nenhum arquivo fatiado para a Centauri 2 na biblioteca. Fatie com o perfil Centauri 2, exporte o G-code e envie em Arquivos.',
+    levelBeforePrint: 'Nivelar a mesa antes de imprimir',
+    addToQueue: 'Adicionar à fila',
+    printQueued: 'Na fila em {{name}}: começa quando a impressora estiver livre',
     connectError: {
       register_timeout: 'A impressora não respondeu: ative o modo LAN Only na tela sensível ao toque. A impressora não foi adicionada.',
       auth_failed: 'Código de acesso recusado pela impressora. A impressora não foi adicionada.',

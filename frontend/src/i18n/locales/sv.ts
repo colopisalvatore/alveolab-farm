@@ -8043,6 +8043,13 @@ errors: {
     faultsTitle: 'Fel som skrivaren rapporterat:',
     faultsNone: 'Inga fel rapporterade av skrivaren',
     bulkSkipped: 'Hoppade över skrivare av andra märken (endast övervakning): {{count}}',
+    printFile: 'Skriv ut en fil',
+    printFileTitle: 'Skriv ut på {{name}}',
+    printFileHint: 'Biblioteksfiler slicade för Centauri 2 (.gcode från OrcaSlicer eller ElegooSlicer). Jobbet väntar i kön tills skrivaren är ledig och plattan bekräftats tom.',
+    printFileNone: 'Ingen fil slicad för Centauri 2 i biblioteket. Slica med Centauri 2-profilen, exportera G-koden och ladda upp den under Filer.',
+    levelBeforePrint: 'Nivellera bädden före utskrift',
+    addToQueue: 'Lägg till i kön',
+    printQueued: 'I kö på {{name}}: startar när skrivaren är ledig',
     connectError: {
       register_timeout: 'Skrivaren svarade inte: slå på LAN Only-läget från pekskärmen. Skrivaren lades inte till.',
       auth_failed: 'Åtkomstkoden nekades av skrivaren. Skrivaren lades inte till.',

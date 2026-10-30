@@ -32,6 +32,11 @@ services:
     environment:
       - TZ=${TZ:-Europe/Rome}
       - PORT=${PORT:-8100}
+      # ELEGOO job commands (M4), comma-separated, switched on one by one only
+      # after their hardware test: file_upload, job_start, job_pause_resume,
+      # job_stop. Empty = the Centauri stays read-only. Set it in .env next to
+      # this file, never by default here.
+      - ALVEOLAB_ELEGOO_ENABLE=${ALVEOLAB_ELEGOO_ENABLE:-}
     restart: unless-stopped
 
 volumes:

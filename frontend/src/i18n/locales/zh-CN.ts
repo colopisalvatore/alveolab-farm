@@ -7977,6 +7977,13 @@ export default {
     faultsTitle: '打印机报告的错误：',
     faultsNone: '打印机未报告错误',
     bulkSkipped: '已跳过其他品牌的打印机（仅监控）：{{count}}',
+    printFile: '打印文件',
+    printFileTitle: '在 {{name}} 上打印',
+    printFileHint: '为 Centauri 2 切片的库文件（来自 OrcaSlicer 或 ElegooSlicer 的 .gcode）。任务在队列中等待，直到打印机空闲且确认打印板已清空。',
+    printFileNone: '库中没有为 Centauri 2 切片的文件。请使用 Centauri 2 配置切片，导出 G-code 并在文件中上传。',
+    levelBeforePrint: '打印前调平热床',
+    addToQueue: '加入队列',
+    printQueued: '已加入 {{name}} 的队列：打印机空闲后开始',
     connectError: {
       register_timeout: '打印机未响应：请在触摸屏上开启 LAN Only 模式。未添加打印机。',
       auth_failed: '打印机拒绝了访问码。未添加打印机。',

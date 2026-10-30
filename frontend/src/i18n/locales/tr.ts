@@ -7919,6 +7919,13 @@ export default {
     faultsTitle: 'Yazıcının bildirdiği hatalar:',
     faultsNone: 'Yazıcı hata bildirmedi',
     bulkSkipped: 'Atlanan diğer marka yazıcılar (yalnızca izleme): {{count}}',
+    printFile: 'Dosya yazdır',
+    printFileTitle: '{{name}} üzerinde yazdır',
+    printFileHint: 'Centauri 2 için dilimlenmiş kitaplık dosyaları (OrcaSlicer veya ElegooSlicer\'dan .gcode). İş, yazıcı boşalana ve tabla boş onaylanana kadar kuyrukta bekler.',
+    printFileNone: 'Kitaplıkta Centauri 2 için dilimlenmiş dosya yok. Centauri 2 profiliyle dilimleyin, G-code\'u dışa aktarın ve Dosyalar\'a yükleyin.',
+    levelBeforePrint: 'Yazdırmadan önce tablayı seviyele',
+    addToQueue: 'Kuyruğa ekle',
+    printQueued: '{{name}} kuyruğunda: yazıcı boşalınca başlar',
     connectError: {
       register_timeout: 'Yazıcı yanıt vermedi: dokunmatik ekrandan LAN Only modunu açın. Yazıcı eklenmedi.',
       auth_failed: 'Erişim kodu yazıcı tarafından reddedildi. Yazıcı eklenmedi.',

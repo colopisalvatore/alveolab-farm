@@ -154,3 +154,103 @@ class TestProviderEndpoints:
             "/api/v1/printer-providers/elegoo/discover", json={"targets": ["printer.example.com"]}
         )
         assert response.status_code == 422
+
+
+# --- M4: job commands through the API ---------------------------------------------
+
+
+class _FakeJobClient:
+    """Stands in for a connected ElegooCC2Client; records the commands asked."""
+
+    def __init__(self, outcome):
+        self.outcome = outcome
+        self.calls: list[str] = []
+
+    def pause_print(self):
+        self.calls.append("pause")
+        return self.outcome
+
+    def resume_print(self):
+        self.calls.append("resume")
+        return self.outcome
+
+    def stop_print(self):
+        self.calls.append("stop")
+        return self.outcome
+
+
+@pytest.fixture
+def provider_client():
+    from backend.app.services.printer_manager import printer_manager
+    from backend.app.services.printer_providers.base import PrinterProvider
+
+    installed: list[int] = []
+
+    def install(printer_id: int, outcome):
+        client = _FakeJobClient(outcome)
+        printer_manager._provider_clients[printer_id] = client
+        printer_manager._providers[printer_id] = PrinterProvider.ELEGOO
+        installed.append(printer_id)
+        return client
+
+    yield install
+    for printer_id in installed:
+        printer_manager._provider_clients.pop(printer_id, None)
+        printer_manager._providers.pop(printer_id, None)
+
+
+class TestProviderJobCommands:
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    @pytest.mark.parametrize("action", ["pause", "resume", "stop"])
+    async def test_accepted(self, async_client: AsyncClient, printer_factory, provider_client, action):
+        from backend.app.services.printer_providers.elegoo.client import COMMAND_ACCEPTED, CommandOutcome
+
+        printer = await printer_factory(provider="elegoo", model="Centauri 2", access_code="")
+        client = provider_client(printer.id, CommandOutcome(COMMAND_ACCEPTED, 1021, 0))
+        response = await async_client.post(f"/api/v1/printers/{printer.id}/print/{action}")
+        assert response.status_code == 200
+        assert client.calls == [action]
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_no_reply_is_not_a_success(self, async_client: AsyncClient, printer_factory, provider_client):
+        from backend.app.services.printer_providers.elegoo.client import COMMAND_NO_REPLY, CommandOutcome
+
+        printer = await printer_factory(provider="elegoo", model="Centauri 2", access_code="")
+        provider_client(printer.id, CommandOutcome(COMMAND_NO_REPLY, 1022))
+        response = await async_client.post(f"/api/v1/printers/{printer.id}/print/stop")
+        assert response.status_code == 504
+        assert response.json()["detail"]["code"] == "no_reply"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_refusal_carries_the_reason(self, async_client: AsyncClient, printer_factory, provider_client):
+        from backend.app.services.printer_providers.elegoo.client import COMMAND_REFUSED, CommandOutcome
+
+        printer = await printer_factory(provider="elegoo", model="Centauri 2", access_code="")
+        provider_client(
+            printer.id,
+            CommandOutcome(COMMAND_REFUSED, 1021, message="job_pause_resume is not enabled for this printer"),
+        )
+        response = await async_client.post(f"/api/v1/printers/{printer.id}/print/pause")
+        assert response.status_code == 409
+        assert "not enabled" in response.json()["detail"]["message"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_queue_stop_keeps_the_row_when_the_printer_does_not_confirm(
+        self, async_client: AsyncClient, printer_factory, provider_client, db_session
+    ):
+        from backend.app.models.print_queue import PrintQueueItem
+        from backend.app.services.printer_providers.elegoo.client import COMMAND_NOT_SENT, CommandOutcome
+
+        printer = await printer_factory(provider="elegoo", model="Centauri 2", access_code="")
+        item = PrintQueueItem(printer_id=printer.id, status="printing")
+        db_session.add(item)
+        await db_session.commit()
+        provider_client(printer.id, CommandOutcome(COMMAND_NOT_SENT, 1022, message="printer not connected"))
+        response = await async_client.post(f"/api/v1/queue/{item.id}/stop")
+        assert response.status_code == 400
+        await db_session.refresh(item)
+        assert item.status == "printing"

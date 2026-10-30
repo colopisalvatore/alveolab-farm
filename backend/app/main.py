@@ -9679,6 +9679,10 @@ async def lifespan(app: FastAPI):
     printer_manager.set_status_change_callback(on_printer_status_change)
     printer_manager.set_print_start_callback(on_print_start)
     printer_manager.set_print_complete_callback(on_print_complete)
+    # ALVEOLAB Farm: start / end of prints on non-Bambu printers (M4).
+    from backend.app.services.provider_jobs import on_provider_job_event
+
+    printer_manager.set_provider_job_event_callback(on_provider_job_event)
     printer_manager.set_print_running_observed_callback(on_print_running_observed)
     printer_manager.set_finish_photo_moment_callback(on_finish_photo_moment)
     printer_manager.set_ams_change_callback(on_ams_change)

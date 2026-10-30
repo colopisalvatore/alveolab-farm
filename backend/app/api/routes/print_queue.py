@@ -2297,10 +2297,21 @@ async def stop_queue_item(
     printer_id = item.printer_id
     auto_off_after = item.auto_off_after
 
+    # ALVEOLAB Farm: a non-Bambu printer answers for itself. Unlike the Bambu
+    # path below, an unreachable printer is not taken as stopped: a dropped
+    # link says nothing about the print, so the row stays 'printing'.
+    from backend.app.services.printer_providers import provider_job_client
+
+    is_provider_printer = provider_job_client(printer_manager, printer_id) is not None
+    if is_provider_printer:
+        from backend.app.api.routes.printers import _provider_job_command
+
+        await _provider_job_command(printer_id, "stop")
+
     # Try to send stop command to printer
-    stop_sent = False
+    stop_sent = is_provider_printer
     try:
-        stop_sent = printer_manager.stop_print(printer_id)
+        stop_sent = stop_sent or printer_manager.stop_print(printer_id)
         if not stop_sent:
             logger.warning("stop_print returned False for printer %s - printer may not be connected", printer_id)
     except Exception as e:

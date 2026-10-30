@@ -1,4 +1,4 @@
-"""MQTT client for the ELEGOO Centauri Carbon 2 (read-only, M2).
+"""MQTT client for the ELEGOO Centauri Carbon 2.
 
 Connection sequence, traced to the official SDK (see ``protocol.py``):
 
@@ -16,7 +16,13 @@ silence. Every state change is pushed through ``on_state_change`` — the
 manager hops it onto the asyncio loop.
 
 Safety rules this client enforces:
-  * Only :data:`protocol.READ_ONLY_METHODS` can be sent — no job commands.
+  * Read-only queries and job commands are built by different functions; a
+    job command (M4) is only sent when its capability is enabled, and only
+    from the job states where it makes sense.
+  * Job commands go out with QoS 0 and are never re-sent: paho re-publishes
+    unacknowledged QoS 1 messages after a reconnect, which could start the
+    same print twice. A command without reply is reported as such, not
+    retried. A start is refused for a job key already sent.
   * A lost link sets ``connected=False`` and leaves the job state as last
     reported: a disconnect is never read as "print finished".
   * Credentials are never logged; the diagnostic log stores payloads only.
@@ -34,14 +40,18 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 
 from backend.app.services.bambu_mqtt import MQTTLogEntry, PrinterState
 from backend.app.services.printer_providers.base import (
+    ACTIVE_JOB_STATES,
+    Capability,
     CapabilitySet,
     ConnectionStatus,
+    JobState,
     NormalizedTelemetry,
     PrinterProvider,
 )
@@ -62,6 +72,76 @@ CONNECT_ERROR_REGISTER_TIMEOUT = "register_timeout"
 CONNECT_ERROR_UNREACHABLE = "unreachable"
 
 
+# Outcome of a job command.
+COMMAND_ACCEPTED = "accepted"  # the printer answered error_code 0
+COMMAND_REJECTED = "rejected"  # the printer answered an error code
+COMMAND_NO_REPLY = "no_reply"  # sent, no answer in time: outcome unknown, not retried
+COMMAND_NOT_SENT = "not_sent"  # not connected, nothing left the farm
+COMMAND_REFUSED = "refused"  # refused by the farm before sending
+
+# Job states from which a new print may be started: the machine is idle or
+# shows the end of the previous job.
+STARTABLE_STATES = frozenset({JobState.IDLE, JobState.FINISHED, JobState.CANCELLED, JobState.FAILED})
+_TERMINAL_STATES = frozenset({JobState.FINISHED, JobState.CANCELLED, JobState.FAILED})
+# Progress from which a print that goes back to idle without a terminal
+# sub-status counts as finished. Our CC2 (fw 02.01.01.04, 29/10/2026) went
+# from "printing 99%" straight to idle; 2077 was never seen.
+FINISHED_PROGRESS_THRESHOLD = 99.0
+
+
+@dataclass(frozen=True)
+class CommandOutcome:
+    status: str
+    method: int | None = None
+    error_code: int | None = None
+    message: str | None = None
+
+    @property
+    def accepted(self) -> bool:
+        return self.status == COMMAND_ACCEPTED
+
+    def to_dict(self) -> dict:
+        return {
+            "status": self.status,
+            "method": self.method,
+            "error_code": self.error_code,
+            "message": self.message,
+        }
+
+
+@dataclass(frozen=True)
+class JobEvent:
+    """A print started or ended, as seen while connected.
+
+    ``outcome`` is FINISHED / CANCELLED / FAILED when the machine said so, or
+    when ``inferred`` (back to idle after 99%). UNKNOWN when the end was not
+    observed (the link dropped during the job): a disconnect never ends a
+    job on its own, the next status read does.
+    """
+
+    kind: str  # "started" | "ended"
+    filename: str | None
+    outcome: JobState | None = None
+    inferred: bool = False
+    progress: float | None = None
+
+
+class _PendingCommand:
+    __slots__ = ("event", "method", "reply")
+
+    def __init__(self, method: int):
+        self.method = method
+        self.event = threading.Event()
+        self.reply: dict | None = None
+
+
+@dataclass
+class _JobRecord:
+    filename: str | None
+    max_progress: float | None = None
+    link_lost: bool = False
+
+
 def _default_mqtt_factory(client_id: str) -> mqtt.Client:
     return mqtt.Client(
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
@@ -79,6 +159,7 @@ class ElegooCC2Client:
     STALE_TIMEOUT = p.HEARTBEAT_TIMEOUT_SECONDS
     HEARTBEAT_INTERVAL = p.HEARTBEAT_INTERVAL_SECONDS
     REGISTER_TIMEOUT = p.REGISTER_TIMEOUT_SECONDS
+    COMMAND_TIMEOUT = 10.0
     LOG_CAPACITY = 500
 
     def __init__(
@@ -88,6 +169,7 @@ class ElegooCC2Client:
         access_code: str | None = None,
         model: str | None = None,
         on_state_change: Callable[[PrinterState], None] | None = None,
+        on_job_event: Callable[[JobEvent], None] | None = None,
         *,
         mqtt_client_factory: Callable[[str], mqtt.Client] | None = None,
         clock: Callable[[], float] = time.monotonic,
@@ -98,6 +180,7 @@ class ElegooCC2Client:
         self._access_code = access_code or None
         self.model = model
         self.on_state_change = on_state_change
+        self.on_job_event = on_job_event
         self._mqtt_factory = mqtt_client_factory or _default_mqtt_factory
         self._clock = clock
         self._start_heartbeat = start_heartbeat
@@ -114,6 +197,11 @@ class ElegooCC2Client:
         self._canvas_info: dict | None = None
         self._telemetry = NormalizedTelemetry(provider=PrinterProvider.ELEGOO, model=model)
         self._request_ids = itertools.count(100000)  # SDK counter start, message_adapter.cpp:44-51
+        self._pending: dict[int, _PendingCommand] = {}
+        # Job keys whose start was sent by this process; the scheduler keeps
+        # its own persisted record, this is the second line.
+        self._started_job_keys: dict[str, str] = {}
+        self._job: _JobRecord | None = None
 
         self._client: mqtt.Client | None = None
         self._registered = False
@@ -267,6 +355,106 @@ class ElegooCC2Client:
     def request_status_update(self) -> bool:
         return self.request(p.METHOD_GET_STATUS)
 
+    # --- Job commands (M4) -------------------------------------------------------
+
+    def _send_job_command(
+        self, method: int, params: dict | None = None, timeout: float | None = None
+    ) -> CommandOutcome:
+        """Publish one job command (QoS 0, never re-sent) and wait for its reply."""
+        with self._lock:
+            client = self._client
+            if client is None or not self._registered or self._connection is not ConnectionStatus.ONLINE:
+                return CommandOutcome(COMMAND_NOT_SENT, method, message="printer not connected")
+            request_id = next(self._request_ids)
+            pending = _PendingCommand(method)
+            self._pending[request_id] = pending
+        try:
+            message = p.build_job_request(request_id, method, params)
+            try:
+                info = client.publish(self.topics.api_request, message, qos=0, retain=False)
+            except Exception as exc:
+                logger.warning("[ELEGOO %s] command %s not sent: %s", self.serial_number, method, exc)
+                return CommandOutcome(COMMAND_NOT_SENT, method, message="publish failed")
+            if getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) != mqtt.MQTT_ERR_SUCCESS:
+                return CommandOutcome(COMMAND_NOT_SENT, method, message="publish failed")
+            self._record(self.topics.api_request, "out", json.loads(message))
+            logger.info("[ELEGOO %s] sent job command %s (id %s)", self.serial_number, method, request_id)
+            if not pending.event.wait(self.COMMAND_TIMEOUT if timeout is None else timeout):
+                logger.warning("[ELEGOO %s] no reply to command %s (id %s)", self.serial_number, method, request_id)
+                return CommandOutcome(COMMAND_NO_REPLY, method, message="no reply from the printer")
+            code = (pending.reply or {}).get("error_code")
+            if code == 0:
+                return CommandOutcome(COMMAND_ACCEPTED, method, 0)
+            code = code if isinstance(code, int) else None
+            message = p.describe_error_code(code) if code is not None else "reply without error_code"
+            logger.warning("[ELEGOO %s] command %s rejected: %s", self.serial_number, method, message)
+            return CommandOutcome(COMMAND_REJECTED, method, code, message)
+        finally:
+            with self._lock:
+                self._pending.pop(request_id, None)
+
+    def _refuse_unless(
+        self, capability: Capability, method: int, allowed: frozenset[JobState]
+    ) -> CommandOutcome | None:
+        if not self.capabilities.supports(capability):
+            return CommandOutcome(
+                COMMAND_REFUSED, method, message=f"{capability.value} is not enabled for this printer"
+            )
+        state = self._telemetry.job_state
+        if state not in allowed:
+            return CommandOutcome(COMMAND_REFUSED, method, message=f"not possible while the printer is {state.value}")
+        return None
+
+    def start_print(
+        self,
+        filename: str,
+        *,
+        job_key: str,
+        plate_layout: str = "A",
+        auto_bed_leveling: bool = False,
+        slot_map: list[dict] | None = None,
+    ) -> CommandOutcome:
+        """Start *filename* (already on the printer). Sent at most once per *job_key*."""
+        method = p.METHOD_START_PRINT
+        try:
+            p.check_machine_filename(filename)
+            params = p.start_print_params(
+                filename, plate_layout=plate_layout, auto_bed_leveling=auto_bed_leveling, slot_map=slot_map
+            )
+        except ValueError as exc:
+            return CommandOutcome(COMMAND_REFUSED, method, message=str(exc))
+        with self._lock:
+            refusal = self._refuse_unless(Capability.JOB_START, method, STARTABLE_STATES)
+            if refusal is not None:
+                return refusal
+            if not job_key:
+                return CommandOutcome(COMMAND_REFUSED, method, message="missing job key")
+            if job_key in self._started_job_keys:
+                return CommandOutcome(COMMAND_REFUSED, method, message="start already sent for this job")
+            # Recorded before sending: a reply lost to a reconnect must not
+            # open the door to a second start of the same job.
+            self._started_job_keys[job_key] = filename
+        outcome = self._send_job_command(method, params)
+        if outcome.status == COMMAND_NOT_SENT:
+            with self._lock:
+                self._started_job_keys.pop(job_key, None)
+        return outcome
+
+    def pause_print(self) -> CommandOutcome:
+        method = p.METHOD_PAUSE_PRINT
+        refusal = self._refuse_unless(Capability.JOB_PAUSE_RESUME, method, frozenset({JobState.PRINTING}))
+        return refusal or self._send_job_command(method)
+
+    def resume_print(self) -> CommandOutcome:
+        method = p.METHOD_RESUME_PRINT
+        refusal = self._refuse_unless(Capability.JOB_PAUSE_RESUME, method, frozenset({JobState.PAUSED}))
+        return refusal or self._send_job_command(method)
+
+    def stop_print(self) -> CommandOutcome:
+        method = p.METHOD_STOP_PRINT
+        refusal = self._refuse_unless(Capability.JOB_STOP, method, ACTIVE_JOB_STATES)
+        return refusal or self._send_job_command(method)
+
     # --- paho callbacks (network thread) ----------------------------------------
 
     def _on_connect(self, client, userdata, flags, reason_code, properties=None):
@@ -328,6 +516,16 @@ class ElegooCC2Client:
         result = payload.get("result")
         if not isinstance(result, dict):
             return
+        reply_id = payload.get("id")
+        if isinstance(reply_id, int) and topic == self.topics.api_response:
+            with self._lock:
+                pending = self._pending.get(reply_id)
+            if pending is not None:
+                pending.reply = result
+                pending.event.set()
+                return
+        if method in p.JOB_METHODS:
+            return  # a late reply to a command we stopped waiting for
         error_code = result.get("error_code")
         if isinstance(error_code, int) and error_code != 0 and method in (p.METHOD_GET_STATUS, p.METHOD_GET_ATTRIBUTES):
             logger.warning(
@@ -464,6 +662,7 @@ class ElegooCC2Client:
                 telemetry.filename = previous.filename
                 telemetry.progress_percent = previous.progress_percent
             self._telemetry = telemetry
+            job_event = self._track_job(telemetry, has_status=status is not None)
             apply_to_printer_state(
                 self._state,
                 telemetry,
@@ -478,6 +677,46 @@ class ElegooCC2Client:
                 callback(state)
             except Exception:
                 logger.exception("[ELEGOO %s] state callback failed", self.serial_number)
+        if job_event is not None and self.on_job_event is not None:
+            try:
+                self.on_job_event(job_event)
+            except Exception:
+                logger.exception("[ELEGOO %s] job event callback failed", self.serial_number)
+
+    def _track_job(self, telemetry: NormalizedTelemetry, *, has_status: bool) -> JobEvent | None:
+        """Turn job-state changes into start / end events. Caller holds the lock.
+
+        Only a status read on a live link moves the tracker. A dropped link
+        marks the job as partly unobserved and nothing else.
+        """
+        job = self._job
+        if telemetry.connection is not ConnectionStatus.ONLINE or not has_status:
+            if job is not None and telemetry.connection in (ConnectionStatus.OFFLINE, ConnectionStatus.AUTH_FAILED):
+                job.link_lost = True
+            return None
+        state = telemetry.job_state
+        if job is None:
+            if state in ACTIVE_JOB_STATES:
+                self._job = _JobRecord(telemetry.filename, telemetry.progress_percent)
+                return JobEvent("started", telemetry.filename, progress=telemetry.progress_percent)
+            return None
+        if telemetry.filename:
+            job.filename = telemetry.filename
+        if telemetry.progress_percent is not None:
+            job.max_progress = max(job.max_progress or 0.0, telemetry.progress_percent)
+        if state in _TERMINAL_STATES:
+            self._job = None
+            return JobEvent("ended", job.filename, state, progress=job.max_progress)
+        if state is JobState.IDLE:
+            self._job = None
+            if job.link_lost:
+                outcome, inferred = JobState.UNKNOWN, False
+            elif job.max_progress is not None and job.max_progress >= FINISHED_PROGRESS_THRESHOLD:
+                outcome, inferred = JobState.FINISHED, True
+            else:
+                outcome, inferred = JobState.UNKNOWN, False
+            return JobEvent("ended", job.filename, outcome, inferred=inferred, progress=job.max_progress)
+        return None
 
 
 async def probe_connection(

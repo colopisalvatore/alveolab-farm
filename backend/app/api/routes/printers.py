@@ -3577,6 +3577,40 @@ async def debug_simulate_print_complete(
 # =============================================================================
 
 
+async def _provider_job_command(printer_id: int, action: str) -> dict | None:
+    """Pause / resume / stop on a non-Bambu printer (ALVEOLAB Farm, M4).
+
+    None when the printer is not a connected provider printer, so the caller
+    falls through to the Bambu path. The provider client refuses commands
+    whose capability is not enabled or that make no sense in the current job
+    state; the printer's own answer is passed back as it is.
+    """
+    from backend.app.services.printer_providers import provider_job_client
+    from backend.app.services.printer_providers.elegoo.client import (
+        COMMAND_ACCEPTED,
+        COMMAND_NO_REPLY,
+        COMMAND_NOT_SENT,
+    )
+
+    client = provider_job_client(printer_manager, printer_id)
+    if client is None:
+        return None
+    command = getattr(client, f"{action}_print", None)
+    if command is None:
+        raise HTTPException(400, "This printer does not support this command")
+    outcome = await asyncio.to_thread(command)
+    if outcome.status == COMMAND_ACCEPTED:
+        return {"success": True, "message": f"Print {action} accepted by the printer"}
+    if outcome.status == COMMAND_NOT_SENT:
+        raise HTTPException(400, "Printer not connected")
+    if outcome.status == COMMAND_NO_REPLY:
+        raise HTTPException(
+            504,
+            {"message": "Command sent, the printer did not answer: check the printer", "code": "no_reply"},
+        )
+    raise HTTPException(409, {"message": outcome.message or "Refused", "code": outcome.status})
+
+
 @router.post("/{printer_id}/print/stop")
 async def stop_print(
     printer_id: int,
@@ -3588,6 +3622,13 @@ async def stop_print(
     printer = result.scalar_one_or_none()
     if not printer:
         raise HTTPException(404, "Printer not found")
+
+    provider_result = await _provider_job_command(printer_id, "stop")
+    if provider_result is not None:
+        from backend.app.main import mark_printer_stopped_by_user
+
+        mark_printer_stopped_by_user(printer_id)
+        return provider_result
 
     client = printer_manager.get_client(printer_id)
     if not client:
@@ -3678,6 +3719,10 @@ async def pause_print(
     if not printer:
         raise HTTPException(404, "Printer not found")
 
+    provider_result = await _provider_job_command(printer_id, "pause")
+    if provider_result is not None:
+        return provider_result
+
     client = printer_manager.get_client(printer_id)
     if not client:
         raise HTTPException(400, "Printer not connected")
@@ -3700,6 +3745,10 @@ async def resume_print(
     printer = result.scalar_one_or_none()
     if not printer:
         raise HTTPException(404, "Printer not found")
+
+    provider_result = await _provider_job_command(printer_id, "resume")
+    if provider_result is not None:
+        return provider_result
 
     client = printer_manager.get_client(printer_id)
     if not client:

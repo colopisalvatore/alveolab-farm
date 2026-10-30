@@ -1,6 +1,6 @@
 # ALVEOLAB Farm — Piano di implementazione
 
-Aggiornato: 2026-10-29. Ogni milestone è piccola, verificabile e lascia il percorso Bambu invariato.
+Aggiornato: 2026-10-30. Ogni milestone è piccola, verificabile e lascia il percorso Bambu invariato.
 
 ## Stato
 
@@ -10,7 +10,7 @@ Aggiornato: 2026-10-29. Ogni milestone è piccola, verificabile e lascia il perc
 | **M1** Astrazione provider | ✅ | `services/printer_providers/` (contratti, capability, normalizzazione Bambu); colonna `printers.provider`; `PrinterManager` multi-provider; guardia scheduler; API capability/telemetria. |
 | **M2** ELEGOO read-only | ✅ vertical slice (solo fixture) · ⏳ verifica hardware | Protocollo CC2, normalizzatore, client MQTT con registrazione/heartbeat/riconnessione, discovery UDP, registrazione manuale via API. **Mai provato su una CC2 reale.** |
 | M3 Integrazione UI | ✅ | Card per capability (Bambu invariata; ELEGOO: solo monitoraggio, niente Stampa/camera/file/controlli/HMS/diagnostica), pannello CANVAS in sola lettura, "Aggiungi stampante" con scelta produttore e ricerca ELEGOO per IP, motivo preciso se l'aggiunta fallisce, stampanti non Bambu escluse dai flussi solo Bambu (invio stampa, muro camere, rilevamento guasti, pipeline, stampante virtuale, AMS SpoolBuddy, profili K). Badge errori ELEGOO (codici riportati dalla stampante) e azioni di massa limitate alle Bambu, con avviso delle stampanti saltate. |
-| M4 Controllo e upload | ⏳ | — |
+| M4 Controllo e upload | 🟡 codice pronto · ⏳ prove hardware | Upload HTTP, avvio/pausa/ripresa/stop, coda verso la Centauri con file controllato (solo file slicati per CC2), fine lavoro dai push, archivio e piatto da liberare. **Comandi spenti di default**: si accendono uno per uno con `ALVEOLAB_ELEGOO_ENABLE` dopo ogni prova HW-M4. Dettagli sotto. |
 | M5 CANVAS e inventario | ⏳ | — |
 | M6 Produzione multibrand | ⏳ | — |
 | M7 Branding e consolidamento | ⏳ | — |
@@ -102,3 +102,25 @@ Cadenza consigliata: ogni rilascio upstream o almeno mensile. Confrontare i fall
 | Ventole lette come PWM 0-255 | Dati reali community; da verificare (HW-M2-05). |
 | `tray_id` non rinumerato; `source` CANVAS = `unknown` | Fonti in conflitto; nessuna simulazione. |
 | Nessuna modifica frontend in M0–M2 | Il prompt pone la UI in M3; API già pronte. |
+
+
+## M4 — come è fatto (30/10/2026)
+
+**Accensione per voce.** Le capability `file_upload`, `job_start`, `job_pause_resume`, `job_stop` della CC2 esistono solo se elencate nella variabile d'ambiente `ALVEOLAB_ELEGOO_ENABLE` del container (`.env` accanto a `deploy/alveolab-farm/docker-compose.yml`). `queue_dispatch` si accende da sola quando ci sono sia `file_upload` sia `job_start`. Vuota = sola lettura, come in M3. Scelta voluta: accendere un comando che muove la macchina è una decisione di deploy, non un clic.
+
+**Comandi** (`elegoo/client.py`):
+- costruiti da `protocol.build_job_request`, separato da `build_request` (solo lettura);
+- QoS 0 e mai ripetuti: paho ripubblica i QoS 1 non confermati dopo una riconnessione, che poteva avviare due volte la stessa stampa;
+- esiti espliciti: `accepted`, `rejected` (codice della stampante), `no_reply` (inviato, esito sconosciuto, nessun nuovo tentativo), `not_sent`, `refused` (rifiutato dalla farm);
+- consentiti solo dagli stati sensati: pausa da `printing`, ripresa da `paused`, stop da uno stato attivo, avvio da `idle`/`finished`/`cancelled`/`failed`;
+- l'avvio ha una chiave di lavoro (`billing_run_id` della riga di coda, scritta nel DB **prima** dell'invio) e il client rifiuta una seconda partenza con la stessa chiave.
+
+**File** (`elegoo/files.py`): alla CC2 va solo un `.gcode` o un 3MF slicato che dichiara, nelle impostazioni dello slicer (`printer_model` / `printer_settings_id`), di essere per una Centauri 2. Bambu, Centauri Carbon di prima generazione, file senza indicazione, 3MF non slicati: rifiutati. La libreria accetta i `.gcode` grezzi solo se slicati per la CC2 (per le Bambu resta il messaggio di upstream) e ne salva il `sliced_for_model`.
+
+**Coda** (`print_scheduler._start_print_provider`): controllo capability → controllo file → upload (innocuo, salva solo il file) → CAS `pending → printing` con nuova chiave → un solo avvio. Niente preriscaldo, iniezione G-code, FTPS, mappatura AMS, controllo filamento AMS, watchdog che rimette in coda. Se l'avvio resta senza risposta la riga resta `printing` con l'avviso, e decide lo stato della stampante.
+
+**Fine lavoro** (`client._track_job` → `services/provider_jobs.py`): eventi `started` / `ended` solo con collegamento attivo. Esito: quello riportato dalla macchina (2077 finita, 2504 annullata, emergenza = fallita); torna `idle` dopo ≥ 99% = finita (osservato sulla nostra CC2 il 29/10, segnato come dedotto); collegamento perso durante il lavoro o `idle` a metà = **esito non osservato**, la riga va in `failed` con un messaggio che chiede di controllare il pezzo. Una disconnessione da sola non chiude mai niente. A ogni fine, piatto da liberare prima del lavoro successivo. Le stampe avviate da Orca o dal touchscreen non creano archivio (la CC2 non permette di scaricare il file).
+
+**Interfaccia:** card della Centauri con "Stampa un file" (solo file della libreria slicati per CC2, opzione livellamento), pausa/ripresa/stop con le stesse conferme della card Bambu. Senza capability accese resta l'avviso di sola lettura. Il pulsante Stampa e il trascinamento file restano solo Bambu.
+
+**Valori scelti senza prova hardware** (da confermare con HW-M4): `print_layout` "A" (piatto testurizzato, come l'esempio SDK), `printer_check` = livellamento solo se richiesto, `delay_video` e `bedlevel_force` spenti, `slot_map` vuoto (vale la mappatura del file; CANVAS manuale è M5).

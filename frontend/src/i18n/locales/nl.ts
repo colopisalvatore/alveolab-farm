@@ -8045,6 +8045,13 @@ export default {
     faultsTitle: 'Fouten gemeld door de printer:',
     faultsNone: 'Geen fouten gemeld door de printer',
     bulkSkipped: 'Overgeslagen printers van andere merken (alleen monitoring): {{count}}',
+    printFile: 'Bestand printen',
+    printFileTitle: 'Printen op {{name}}',
+    printFileHint: 'Bibliotheekbestanden gesliced voor de Centauri 2 (.gcode uit OrcaSlicer of ElegooSlicer). De taak wacht in de wachtrij tot de printer vrij is en de plaat leeg is bevestigd.',
+    printFileNone: 'Geen bestand voor de Centauri 2 in de bibliotheek. Slice met het Centauri 2-profiel, exporteer de G-code en upload die bij Bestanden.',
+    levelBeforePrint: 'Bed nivelleren voor het printen',
+    addToQueue: 'Aan wachtrij toevoegen',
+    printQueued: 'In de wachtrij op {{name}}: start zodra de printer vrij is',
     connectError: {
       register_timeout: 'De printer antwoordde niet: zet LAN Only-modus aan via het touchscreen. De printer is niet toegevoegd.',
       auth_failed: 'Toegangscode geweigerd door de printer. De printer is niet toegevoegd.',

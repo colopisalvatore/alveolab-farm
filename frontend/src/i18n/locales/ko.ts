@@ -7613,6 +7613,13 @@ export default {
     faultsTitle: '프린터가 보고한 오류:',
     faultsNone: '프린터가 보고한 오류가 없습니다',
     bulkSkipped: '건너뛴 다른 브랜드 프린터(모니터링 전용): {{count}}',
+    printFile: '파일 출력',
+    printFileTitle: '{{name}}에서 출력',
+    printFileHint: 'Centauri 2용으로 슬라이스한 라이브러리 파일(OrcaSlicer 또는 ElegooSlicer의 .gcode). 프린터가 비고 베드가 비어 있음이 확인될 때까지 대기열에서 기다립니다.',
+    printFileNone: '라이브러리에 Centauri 2용 파일이 없습니다. Centauri 2 프로필로 슬라이스하고 G-code를 내보내 파일에 업로드하세요.',
+    levelBeforePrint: '출력 전에 베드 레벨링',
+    addToQueue: '대기열에 추가',
+    printQueued: '{{name}} 대기열에 추가됨: 프린터가 비면 시작합니다',
     connectError: {
       register_timeout: '프린터가 응답하지 않았습니다. 터치스크린에서 LAN Only 모드를 켜세요. 프린터가 추가되지 않았습니다.',
       auth_failed: '프린터가 액세스 코드를 거부했습니다. 프린터가 추가되지 않았습니다.',

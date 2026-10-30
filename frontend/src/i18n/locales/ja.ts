@@ -7993,6 +7993,13 @@ export default {
     faultsTitle: 'プリンターが報告したエラー：',
     faultsNone: 'プリンターからのエラー報告はありません',
     bulkSkipped: 'スキップした他社製プリンター（監視のみ）：{{count}}',
+    printFile: 'ファイルを印刷',
+    printFileTitle: '{{name}} で印刷',
+    printFileHint: 'Centauri 2 用にスライスしたライブラリのファイル（OrcaSlicer または ElegooSlicer の .gcode）。プリンターが空き、プレートが空であると確認されるまでキューで待機します。',
+    printFileNone: 'ライブラリに Centauri 2 用のファイルがありません。Centauri 2 のプロファイルでスライスし、G-code をエクスポートしてファイルにアップロードしてください。',
+    levelBeforePrint: '印刷前にベッドをレベリングする',
+    addToQueue: 'キューに追加',
+    printQueued: '{{name}} のキューに追加しました：プリンターが空き次第開始します',
     connectError: {
       register_timeout: 'プリンターが応答しませんでした。タッチスクリーンでLAN Onlyモードをオンにしてください。プリンターは追加されませんでした。',
       auth_failed: 'プリンターがアクセスコードを拒否しました。プリンターは追加されませんでした。',

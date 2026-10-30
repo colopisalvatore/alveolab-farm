@@ -265,6 +265,14 @@ def validate_print_file_upload(filename: str, content: bytes) -> None:
     is_3mf_upload = lower_filename.endswith(".3mf")
     is_raw_gcode_upload = lower_filename.endswith(".gcode") and not lower_filename.endswith(".gcode.3mf")
 
+    # ALVEOLAB Farm: raw G-code is how OrcaSlicer / ElegooSlicer hand a job to
+    # an ELEGOO Centauri 2. Accepted only when the file itself says it was
+    # sliced for one; every other raw G-code still gets the Bambu message.
+    if is_raw_gcode_upload:
+        from backend.app.services.printer_providers.elegoo.files import gcode_sliced_for_cc2
+
+        if gcode_sliced_for_cc2(content):
+            return
     if is_raw_gcode_upload:
         raise HTTPException(
             status_code=400,
@@ -2422,6 +2430,16 @@ async def upload_file(
                     thumbnail_path = str(thumb_path)
             except Exception as e:
                 logger.warning("Failed to extract gcode thumbnail: %s", e)
+            # ALVEOLAB Farm: record which printer the G-code was sliced for, so
+            # the queue's model check keeps it away from the wrong machine.
+            try:
+                from backend.app.services.printer_providers.elegoo.files import check_printable_on_cc2
+
+                check = check_printable_on_cc2(file_path)
+                if check.sliced_for:
+                    metadata["sliced_for_model"] = check.sliced_for
+            except Exception as e:
+                logger.warning("Failed to read the target printer of %s: %s", filename, e)
 
         elif ext.lower() in IMAGE_EXTENSIONS:
             # For image files, create a thumbnail from the image itself

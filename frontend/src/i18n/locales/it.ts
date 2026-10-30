@@ -7979,6 +7979,13 @@ export default {
     faultsTitle: 'Errori segnalati dalla stampante:',
     faultsNone: 'Nessun errore segnalato dalla stampante',
     bulkSkipped: 'Stampanti di altre marche saltate (solo monitoraggio): {{count}}',
+    printFile: 'Stampa un file',
+    printFileTitle: 'Stampa su {{name}}',
+    printFileHint: 'File della libreria preparati per la Centauri 2 (.gcode da OrcaSlicer o ElegooSlicer). Il lavoro aspetta in coda finché la stampante è libera e il piatto è confermato libero.',
+    printFileNone: 'Nessun file preparato per la Centauri 2 nella libreria. Preparalo con il profilo Centauri 2, esporta il G-code e caricalo in File.',
+    levelBeforePrint: 'Livella il piatto prima di stampare',
+    addToQueue: 'Aggiungi alla coda',
+    printQueued: 'In coda su {{name}}: parte appena la stampante è libera',
     connectError: {
       register_timeout: 'La stampante non ha risposto: attiva la modalità LAN Only dal touchscreen. La stampante non è stata aggiunta.',
       auth_failed: 'Codice di accesso rifiutato dalla stampante. La stampante non è stata aggiunta.',

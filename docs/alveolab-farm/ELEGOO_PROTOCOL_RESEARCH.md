@@ -108,11 +108,13 @@ Mappatura sub-stati di stampa → `JobState`: vedi `normalizer.job_state_from_ma
 3. **Rilevato vs dichiarato: non esposto da nessuna fonte** (nessun RFID/flag). → `MultiColorSlot.source = unknown`. Nessuna simulazione: in M5 l'associazione bobina-slot sarà **manuale** in UI, con avviso.
 4. Nessun metodo per modificare i dati di uno slot nell'SDK → capability `multicolor_slot_edit` assente.
 
-## 7. Upload file (per M4, non implementato)
+## 7. Upload file e comandi di lavoro (M4, implementati 30/10, da provare su hardware)
 
 `PUT http://<ip>/upload` (porta 80), corpo raw a blocchi ≤ 1 MiB, header `Content-Type: application/octet-stream`, `Content-Range: bytes a-b/totale`, `X-File-Name`, `X-File-MD5` (MD5 file intero), `X-Token` (access code o default), risposta `{"error_code":0}` (`elegoo_fdm_cc2_http_transfer.cpp:55-290`). Il file caricato si avvia con `storage_media: "local"` e `filename` (esempio SDK `examples/printer_connection_test.cpp:323-388`). Estensioni: nessun controllo sul percorso LAN; il cloud accetta `gcode`/`3mf` (`cloud_service.cpp:2449-2455`). Limiti di dimensione: **non trovati**.
 
 **3MF Bambu ≠ file stampabile ELEGOO.** Un 3MF slicato da Bambu Studio contiene G-code per macchine Bambu (`Metadata/plate_N.gcode`): non va inviato alla CC2. In M4 si distingue: modello sorgente (STL/3MF progetto) → profilo di slicing ELEGOO → file macchina (`.gcode`, o 3MF slicato da ElegooSlicer/Orca con profilo CC2) → stampante.
+
+**Implementazione (30/10/2026):** `elegoo/upload.py` (stesso trasferimento dell'SDK: un `PUT` per blocco, MD5 dell'intero file in ogni blocco, `X-Token` = access code o default; nessun nuovo tentativo dei blocchi). Parametri di avvio come l'SDK (`message_adapter.cpp:59-97`): `storage_media: "local"`, `filename`, `config.{delay_video: false, printer_check, print_layout "A"/"B", bedlevel_force: false, slot_map: []}`. Pausa 1021, stop 1022 e ripresa 1023 con `params: {}` (SDK `default:` riga 212; community `CC2_PROTOCOL.md:1935-1950`). Sottostati di trasferimento 3000/3001 con `status` 11 (community `CC2_PROTOCOL.md:836-839`). Il firmware stock espone sulla porta 80 solo `PUT /upload` (community `CC2_PROTOCOL.md:210`): niente elenco né download dei file via HTTP.
 
 ## 8. Camera
 

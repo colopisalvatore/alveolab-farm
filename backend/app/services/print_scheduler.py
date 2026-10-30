@@ -60,7 +60,7 @@ from backend.app.services.printer_manager import (
     supports_drying,
     supports_drying_while_printing,
 )
-from backend.app.services.printer_providers.base import Capability
+from backend.app.services.printer_providers.base import Capability, PrinterProvider, parse_provider
 from backend.app.services.smart_plug_manager import smart_plug_manager
 from backend.app.services.spool_assignment_notifications import (
     _global_tray_from_assignment,
@@ -217,6 +217,12 @@ def _terminal_queue_status(state) -> str | None:
     if state is None or not getattr(state, "connected", False):
         return None
     return _TERMINAL_STATE_QUEUE_STATUS.get(getattr(state, "state", None))
+
+
+def _is_provider_printer(printer_id: int) -> bool:
+    """True for a connected non-Bambu printer (ALVEOLAB Farm)."""
+    provider = printer_manager.get_provider(printer_id)
+    return isinstance(provider, PrinterProvider) and provider is not PrinterProvider.BAMBU
 
 
 @dataclass
@@ -1198,6 +1204,8 @@ class PrintScheduler:
         # unsuccessful exit; a successful start removes the item id and leaves
         # the reservation for finance_billing to consume with the archive.
         self._unconfirmed_budget_reservations: set[int] = set()
+        # ALVEOLAB Farm: display name of provider jobs, for failure notifications.
+        self._provider_job_names: dict[int, str] = {}
         # Chamber temperature history for smart soak-time reduction.
         # printer_id -> deque of (monotonic_timestamp, celsius) sampled each scheduler tick.
         # Entries older than _chamber_history_ttl are pruned on write.
@@ -1319,6 +1327,14 @@ class PrintScheduler:
                     if now - since < _STRANDED_PRINTING_GRACE_SECONDS:
                         continue
 
+                    if status == "cancelled" and _is_provider_printer(printer_id):
+                        # ALVEOLAB Farm: a provider printer's end is handled by
+                        # provider_jobs; reaching here means it was not seen.
+                        # Idle proves nothing about how the print went.
+                        from backend.app.services.provider_jobs import OUTCOME_NOT_OBSERVED
+
+                        status = "failed"
+                        item.error_message = OUTCOME_NOT_OBSERVED
                     item.status = status
                     item.completed_at = datetime.now(timezone.utc)
                     closed = True
@@ -3375,6 +3391,8 @@ class PrintScheduler:
         the data to judge, so dispatch is only ever blocked on a positive
         finding.
         """
+        if _is_provider_printer(printer_id):
+            return None  # ALVEOLAB Farm: no Bambu AMS; the file carries its CANVAS mapping
         stored_mapping: list | None = None
         if item.ams_mapping:
             try:
@@ -7182,6 +7200,8 @@ class PrintScheduler:
         since been swapped to one with enough material clears the flag here
         so the next scheduler tick dispatches it.
         """
+        if item.printer_id is not None and _is_provider_printer(item.printer_id):
+            return False  # ALVEOLAB Farm: spool tracking is per Bambu AMS tray (CANVAS is M5)
         # User has explicitly acknowledged the deficit ("Print Anyway") —
         # don't re-flag, don't even compute. Without this short-circuit the
         # scheduler bounces between "user said anyway" (route clears
@@ -7615,6 +7635,13 @@ class PrintScheduler:
             await db.commit()
             logger.error("Queue item %s: File not found: %s", item.id, file_path)
             await self._power_off_if_needed(db, item)
+            return
+
+        # ALVEOLAB Farm (M4): a non-Bambu printer has its own transfer and start.
+        # Nothing below applies to it: preheat, G-code injection, FTPS upload,
+        # the Bambu project_file command and the watchdog that re-queues a job.
+        if parse_provider(getattr(printer, "provider", None)) is not PrinterProvider.BAMBU:
+            await self._start_print_provider(db, item, printer, archive, file_path, filename)
             return
 
         # Nozzle-diameter mismatch guard (#1899). A file sliced for one nozzle
@@ -8417,6 +8444,162 @@ class PrintScheduler:
                 pass
 
             await self._power_off_if_needed(db, item)
+
+    # Wait for a provider printer to be idle after an upload: 30 x 0.5 s.
+    PROVIDER_READY_POLLS = 30
+    PROVIDER_READY_INTERVAL = 0.5
+
+    async def _fail_provider_item(self, db: AsyncSession, item: PrintQueueItem, printer, message: str, reason: str):
+        item.status = "failed"
+        item.error_message = message
+        item.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+        logger.warning("Queue item %s on printer %s failed: %s", item.id, printer.id, message)
+        try:
+            await notification_service.on_queue_job_failed(
+                job_name=self._provider_job_names.get(item.id, f"#{item.id}"),
+                printer_id=printer.id,
+                printer_name=printer.name,
+                reason=message,
+                db=db,
+            )
+        except Exception:
+            logger.debug("Queue item %s: failure notification not sent", item.id, exc_info=True)
+        try:
+            await ws_manager.send_queue_item_failed(
+                user_id=item.created_by_id, queue_item_id=item.id, printer_id=printer.id, reason=reason
+            )
+        except Exception:
+            pass
+        await self._power_off_if_needed(db, item)
+
+    async def _start_print_provider(
+        self,
+        db: AsyncSession,
+        item: PrintQueueItem,
+        printer,
+        archive: PrintArchive | None,
+        file_path: Path,
+        filename: str | None,
+    ) -> None:
+        """Dispatch a queue item to a non-Bambu printer (ELEGOO CC2, M4).
+
+        Order matters and mirrors the Bambu path's safety points:
+          1. the printer must declare upload + start, and the file must say it
+             was sliced for this printer — a Bambu 3MF is refused here;
+          2. upload (harmless: it only stores a file);
+          3. CAS pending -> printing with a fresh ``billing_run_id``, committed
+             before the command: that id is the job key, so even a crash right
+             after the send cannot lead to a second start of this row;
+          4. one start command. No retry and no watchdog re-queue: a start
+             without reply leaves the row 'printing' and the printer's own
+             status decides (``services/provider_jobs.py``, stranded sweep).
+        """
+        from backend.app.services import provider_jobs
+        from backend.app.services.printer_providers.elegoo.client import (
+            COMMAND_ACCEPTED,
+            COMMAND_NO_REPLY,
+            STARTABLE_STATES,
+        )
+        from backend.app.services.printer_providers.elegoo.files import check_printable_on_cc2, printer_filename
+        from backend.app.services.printer_providers.elegoo.upload import upload_file
+
+        self._provider_job_names[item.id] = Path(filename or file_path.name).stem
+        client = printer_manager.get_provider_client(item.printer_id)
+        capabilities = printer_manager.get_capabilities(item.printer_id)
+        if (
+            client is None
+            or capabilities is None
+            or not capabilities.supports(Capability.FILE_UPLOAD)
+            or not capabilities.supports(Capability.JOB_START)
+            or not callable(getattr(client, "start_print", None))
+        ):
+            await self._fail_provider_item(
+                db, item, printer, "This printer does not accept prints from the farm yet", "not_supported"
+            )
+            return
+
+        check = await asyncio.to_thread(check_printable_on_cc2, file_path)
+        if not check.ok:
+            await self._fail_provider_item(db, item, printer, f"File refused: {check.message}", "incompatible_file")
+            return
+        try:
+            remote_name = printer_filename(filename or file_path.name)
+        except ValueError as exc:
+            await self._fail_provider_item(db, item, printer, f"File refused: {exc}", "incompatible_file")
+            return
+
+        upload = await upload_file(printer.ip_address, file_path, remote_name, printer.access_code or None)
+        if not upload.success:
+            await self._fail_provider_item(
+                db, item, printer, f"Upload to the printer failed: {upload.message} ({upload.reason})", "upload_failed"
+            )
+            return
+
+        await self._propagate_owner_to_printer_manager(db, item)
+        now_utc = datetime.now(timezone.utc)
+        billing_run_id = str(uuid.uuid4())
+        cas = await db.execute(
+            update(PrintQueueItem)
+            .where(PrintQueueItem.id == item.id)
+            .where(PrintQueueItem.status == "pending")
+            .values(status="printing", started_at=now_utc, billing_run_id=billing_run_id)
+        )
+        await db.commit()
+        if cas.rowcount == 0:
+            logger.info("Queue item %s no longer pending after upload — not starting it", item.id)
+            return
+        item.status = "printing"
+        item.started_at = now_utc
+        item.billing_run_id = billing_run_id
+        if archive is not None:
+            archive.billing_run_id = billing_run_id
+            archive.wallet_charge_skipped = False
+            await db.commit()
+
+        # The CC2 reports "file transferring" while it stores the upload; the
+        # SDK's own example waits before starting. Give it a few seconds to be
+        # idle again rather than having the start refused as busy.
+        for _ in range(self.PROVIDER_READY_POLLS):
+            telemetry = client.telemetry() if callable(getattr(client, "telemetry", None)) else None
+            if telemetry is None or telemetry.job_state in STARTABLE_STATES:
+                break
+            await asyncio.sleep(self.PROVIDER_READY_INTERVAL)
+
+        printer_manager.set_awaiting_plate_clear(item.printer_id, False)
+        provider_jobs.record_dispatch(item.printer_id, item.id, remote_name)
+        pre_status = printer_manager.get_status(item.printer_id)
+        outcome = await asyncio.to_thread(
+            client.start_print,
+            remote_name,
+            job_key=billing_run_id,
+            auto_bed_leveling=item.bed_levelling == "on",
+        )
+        if outcome.status in (COMMAND_ACCEPTED, COMMAND_NO_REPLY):
+            # The command left the farm: the budget is spent and the printer is
+            # held against another dispatch until it reports the new job.
+            self._unconfirmed_budget_reservations.discard(item.id)
+            self._mark_printer_dispatched(
+                item.printer_id,
+                getattr(pre_status, "state", None),
+                getattr(pre_status, "subtask_id", None),
+            )
+            if outcome.status == COMMAND_NO_REPLY:
+                item.error_message = "Start sent, the printer did not confirm it: check the printer"
+                await db.commit()
+                logger.warning("Queue item %s: start sent to printer %s without reply", item.id, printer.id)
+            else:
+                logger.info("Queue item %s: print started on %s (%s)", item.id, printer.name, remote_name)
+            return
+
+        provider_jobs.forget_dispatch(item.printer_id)
+        await self._fail_provider_item(
+            db,
+            item,
+            printer,
+            f"The printer refused the start: {outcome.message}",
+            "start_refused",
+        )
 
     @staticmethod
     async def _watchdog_print_start(

@@ -54,16 +54,35 @@ METHOD_GET_STATUS = 1002
 METHOD_START_PRINT = 1020
 METHOD_PAUSE_PRINT = 1021
 METHOD_STOP_PRINT = 1022
+# Commented out of the SDK's mapping table (adapter line 1399); the community
+# integration sends it with empty params (HA cc2/const.py:51). Only used once
+# HW-M4-05 has shown our firmware accepts it.
+METHOD_RESUME_PRINT = 1023
 METHOD_SET_AUTO_REFILL = 2004
 METHOD_GET_CANVAS_STATUS = 2005
 METHOD_ON_STATUS = 6000  # push, delta
 METHOD_ON_ATTRIBUTES = 6008  # push
 METHOD_DISCOVERY = 7000  # UDP only
 
-# Methods this build may send. Read-only queries only (M2): nothing in this set
-# changes what the machine is doing. Job control (1020/1021/1022/1023) is added
-# in M4 behind explicit capability flags and a hardware test sign-off.
+# Read-only queries: nothing in this set changes what the machine is doing.
 READ_ONLY_METHODS = frozenset({METHOD_GET_ATTRIBUTES, METHOD_GET_STATUS, METHOD_GET_CANVAS_STATUS})
+# Job control (M4). Built by a separate function so a read-only call site can
+# never send one by passing the wrong number; each is further gated by a
+# capability that is only switched on after its hardware test.
+JOB_METHODS = frozenset({METHOD_START_PRINT, METHOD_PAUSE_PRINT, METHOD_STOP_PRINT, METHOD_RESUME_PRINT})
+
+# --- File upload (HTTP) ------------------------------------------------------
+# PUT http://<ip>/upload, raw body in chunks of at most 1 MiB, MD5 of the whole
+# file in every chunk (elegoo_fdm_cc2_http_transfer.cpp:55-290). Stock firmware
+# serves nothing else on port 80 (community CC2_PROTOCOL.md:210).
+UPLOAD_PORT = 80
+UPLOAD_PATH = "/upload"
+UPLOAD_CHUNK_BYTES = 1024 * 1024
+# Machine files the CC2 prints: G-code, or a 3MF sliced for it by
+# ElegooSlicer / Orca with a CC2 profile (the cloud path accepts both,
+# cloud_service.cpp:2449-2455).
+PRINTABLE_EXTENSIONS = (".gcode", ".3mf")
+MAX_FILENAME_LENGTH = 200
 
 # --- Status codes ------------------------------------------------------------
 # machine_status.status (elegoo_fdm_cc2_message_adapter.cpp:644-957).
@@ -121,6 +140,9 @@ PRINT_SUB_COMPLETED = 2077
 PRINT_SUB_STOPPING = 2503
 PRINT_SUB_STOPPED = 2504
 PRINT_SUB_NONE = frozenset({0, 1041})
+# status 11 (file transferring), community CC2_PROTOCOL.md:836-839.
+TRANSFER_SUB_UPLOADING = 3000
+TRANSFER_SUB_UPLOADED = 3001
 
 # result.error_code (adapter comment table 1427-1474).
 ERROR_CODES = {
@@ -236,8 +258,67 @@ def build_request(request_id: int, method: int, params: dict | None = None) -> s
     be able to start, pause or stop a job by accident.
     """
     if method not in READ_ONLY_METHODS:
-        raise PermissionError(f"CC2 method {method} is not enabled in this build (read-only)")
+        raise PermissionError(f"CC2 method {method} is not a read-only query")
     return json.dumps({"id": request_id, "method": method, "params": params or {}})
+
+
+def build_job_request(request_id: int, method: int, params: dict | None = None) -> str:
+    """Envelope of a job command (start / pause / stop / resume). Nothing else."""
+    if method not in JOB_METHODS:
+        raise PermissionError(f"CC2 method {method} is not a job command")
+    return json.dumps({"id": request_id, "method": method, "params": params or {}})
+
+
+def start_print_params(
+    filename: str,
+    *,
+    plate_layout: str = "A",
+    auto_bed_leveling: bool = False,
+    slot_map: list[dict] | None = None,
+) -> dict:
+    """``params`` of a 1020 start, as the SDK builds them (adapter lines 59-97).
+
+    ``plate_layout``: "A" textured high-temperature plate, "B" smooth
+    low-temperature plate (``StartPrintParams.heatedBedType``, printer.h:501).
+    Time-lapse and forced levelling stay off, like the SDK's own example
+    (printer_connection_test.cpp:372-377). ``slot_map`` is
+    ``[{"t", "canvas_id", "tray_id"}]``; empty lets the printer use the mapping
+    stored in the file.
+    """
+    if plate_layout not in ("A", "B"):
+        raise ValueError(f"plate_layout must be 'A' or 'B', not {plate_layout!r}")
+    return {
+        "storage_media": "local",
+        "filename": filename,
+        "config": {
+            "delay_video": False,
+            "printer_check": bool(auto_bed_leveling),
+            "print_layout": plate_layout,
+            "bedlevel_force": False,
+            "slot_map": [dict(item) for item in slot_map or []],
+        },
+    }
+
+
+def check_machine_filename(filename: str) -> str:
+    """Validate the name a file will have on the printer; returns it unchanged.
+
+    A bare name with a printable extension: no folders, no ``..``, no control
+    characters. The printer stores and starts files by this name.
+    """
+    if not isinstance(filename, str) or not filename.strip():
+        raise ValueError("file name is empty")
+    if filename != filename.strip():
+        raise ValueError("file name has leading or trailing spaces")
+    if len(filename) > MAX_FILENAME_LENGTH:
+        raise ValueError(f"file name longer than {MAX_FILENAME_LENGTH} characters")
+    if "/" in filename or "\\" in filename or filename in (".", "..") or filename.startswith("."):
+        raise ValueError("file name must be a bare name, without folders")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in filename):
+        raise ValueError("file name contains control characters")
+    if not filename.lower().endswith(PRINTABLE_EXTENSIONS):
+        raise ValueError("only .gcode or .3mf sliced for the printer can be sent")
+    return filename
 
 
 # --- Parsers -----------------------------------------------------------------

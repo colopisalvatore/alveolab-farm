@@ -54,20 +54,27 @@ const idleStatus = {
 
 const capabilitiesRequests: number[] = [];
 let telemetryFaults: Array<{ code: string; severity: string; message: string | null }> = [];
+// M4 job capabilities a deployment has switched on for the CC2.
+let jobCaps: string[] = [];
+let elegooState = 'IDLE';
 
 beforeEach(() => {
   capabilitiesRequests.length = 0;
   telemetryFaults = [];
+  jobCaps = [];
+  elegooState = 'IDLE';
   server.use(
     http.get('/api/v1/printers/', () => HttpResponse.json([bambu, elegoo])),
-    http.get('/api/v1/printers/:id/status', () => HttpResponse.json(idleStatus)),
+    http.get('/api/v1/printers/:id/status', ({ params }) =>
+      HttpResponse.json(Number(params.id) === 5 ? { ...idleStatus, state: elegooState } : idleStatus),
+    ),
     http.get('/api/v1/queue/', () => HttpResponse.json([])),
     http.get('/api/v1/printer-providers/printers/:id/capabilities', ({ params }) => {
       capabilitiesRequests.push(Number(params.id));
       return HttpResponse.json({
         provider: 'elegoo',
         model: 'Centauri 2',
-        supported: ['auto_reconnect', 'fan_speeds', 'multicolor_status', 'status', 'temperatures'],
+        supported: ['auto_reconnect', 'fan_speeds', 'multicolor_status', 'status', 'temperatures', ...jobCaps],
         notes: { queue_dispatch: 'ELEGOO dispatch is M4' },
       });
     }),
@@ -232,5 +239,99 @@ describe('AddPrinterModal — ELEGOO', () => {
         auto_archive: false,
       }),
     );
+  });
+});
+
+describe('PrintersPage — ELEGOO job control (M4)', () => {
+  const allJobCaps = ['file_upload', 'job_start', 'job_pause_resume', 'job_stop', 'queue_dispatch'];
+
+  it('stays read-only until the deployment switches the commands on', async () => {
+    elegooState = 'RUNNING';
+    render(<PrintersPage />);
+    const { elegooCard } = await cards();
+    await waitFor(() => expect(within(elegooCard).getByTestId('provider-read-only')).toBeInTheDocument());
+    expect(within(elegooCard).queryByTestId('provider-job-controls')).toBeNull();
+    expect(within(elegooCard).queryByRole('button', { name: /pause/i })).toBeNull();
+  });
+
+  it('pauses a running print after confirmation', async () => {
+    jobCaps = allJobCaps;
+    elegooState = 'RUNNING';
+    const paused: number[] = [];
+    server.use(
+      http.post('/api/v1/printers/:id/print/pause', ({ params }) => {
+        paused.push(Number(params.id));
+        return HttpResponse.json({ success: true, message: 'ok' });
+      }),
+    );
+    render(<PrintersPage />);
+    const { elegooCard } = await cards();
+    const controls = await within(elegooCard).findByTestId('provider-job-controls');
+    expect(within(controls).queryByRole('button', { name: 'Resume' })).toBeNull();
+    expect(within(controls).getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+    fireEvent.click(within(controls).getByRole('button', { name: 'Pause' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Pause Print' }));
+    await waitFor(() => expect(paused).toEqual([5]));
+  });
+
+  it('offers only files sliced for the Centauri 2 and queues the chosen one', async () => {
+    jobCaps = allJobCaps;
+    const queued: unknown[] = [];
+    const file = (id: number, filename: string, sliced: string | null) => ({
+      id,
+      folder_id: null,
+      is_external: false,
+      filename,
+      file_type: filename.endsWith('.gcode') ? 'gcode' : 'gcode.3mf',
+      file_size: 1000,
+      thumbnail_path: null,
+      print_count: 0,
+      duplicate_count: 0,
+      created_by_id: null,
+      created_by_username: null,
+      created_at: '2026-10-30T00:00:00Z',
+      fs_modified_at: null,
+      print_name: null,
+      print_time_seconds: null,
+      filament_used_grams: null,
+      sliced_for_model: sliced,
+      tags: [],
+    });
+    server.use(
+      http.get('/api/v1/library/files', () =>
+        HttpResponse.json([
+          file(10, 'benchy_cc2.gcode', 'Elegoo Centauri Carbon 2'),
+          file(11, 'benchy_p1s.gcode.3mf', 'P1S'),
+          file(12, 'mystery.gcode', null),
+        ]),
+      ),
+      http.post('/api/v1/queue/', async ({ request }) => {
+        queued.push(await request.json());
+        return HttpResponse.json({ id: 99 });
+      }),
+    );
+    render(<PrintersPage />);
+    const { elegooCard } = await cards();
+    fireEvent.click(await within(elegooCard).findByRole('button', { name: 'Print a file' }));
+
+    const option = await screen.findByRole('radio', { name: 'benchy_cc2.gcode' });
+    expect(screen.queryByRole('radio', { name: 'benchy_p1s.gcode.3mf' })).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'mystery.gcode' })).toBeNull();
+    fireEvent.click(option);
+    fireEvent.click(screen.getByLabelText('Level the bed before printing'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }));
+
+    await waitFor(() =>
+      expect(queued).toEqual([{ printer_id: 5, library_file_id: 10, bed_levelling: 'on' }]),
+    );
+  });
+
+  it('keeps the Bambu print button and drop flow for Bambu printers only', async () => {
+    jobCaps = allJobCaps;
+    render(<PrintersPage />);
+    const { bambuCard, elegooCard } = await cards();
+    await waitFor(() => expect(within(bambuCard).getByRole('button', { name: 'Print' })).toBeInTheDocument());
+    await within(elegooCard).findByTestId('provider-job-controls');
+    expect(within(elegooCard).queryByRole('button', { name: 'Print' })).toBeNull();
   });
 });
