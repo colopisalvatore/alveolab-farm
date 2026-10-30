@@ -1329,6 +1329,11 @@ export default {
 
   // Queue page
   queue: {
+    outsideQueue: {
+      openPrinter: 'プリンターページを開く',
+      paused: '一時停止中',
+      remaining: '残り {{time}}',
+    },
     filamentShort: {
       rowBadge: '割り当てられたスプールのフィラメントが不足しています',
       rowTooltip: 'スケジューラーがこのアイテムをフラグしました。再生ボタンをクリックしてスロットごとの不足量を確認し、それでも印刷するか判断してください。',

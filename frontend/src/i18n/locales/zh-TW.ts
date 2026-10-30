@@ -1330,6 +1330,11 @@ export default {
 
   // Queue page
   queue: {
+    outsideQueue: {
+      openPrinter: '開啟印表機頁面',
+      paused: '已暫停',
+      remaining: '剩餘 {{time}}',
+    },
     filamentShort: {
       rowBadge: '所分配料盤的線材不足',
       rowTooltip: '調度程式已標記此項目。點擊播放查看各槽位的不足量，並決定是否仍要列印。',

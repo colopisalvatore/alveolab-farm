@@ -1339,6 +1339,11 @@ export default {
 
   // Queue page
   queue: {
+    outsideQueue: {
+      openPrinter: 'Відкрити сторінку принтерів',
+      paused: 'На паузі',
+      remaining: 'залишилось {{time}}',
+    },
     title: "Черга друку",
     subtitle: "Плануйте завдання друку та керуйте ними",
     filamentShort: {

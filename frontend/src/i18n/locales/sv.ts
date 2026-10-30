@@ -1340,6 +1340,11 @@ export default {
 
   // Queue page
   queue: {
+    outsideQueue: {
+      openPrinter: 'Öppna skrivarsidan',
+      paused: 'Pausad',
+      remaining: '{{time}} kvar',
+    },
     title: 'Utskriftskö',
     subtitle: 'Schemalägg och hantera dina utskriftsjobb',
     filamentShort: {

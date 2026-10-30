@@ -1330,6 +1330,11 @@ export default {
 
   // Queue page
   queue: {
+    outsideQueue: {
+      openPrinter: '打开打印机页面',
+      paused: '已暂停',
+      remaining: '剩余 {{time}}',
+    },
     filamentShort: {
       rowBadge: '所分配料盘的耀丝不足',
       rowTooltip: '调度程序已标记该项。点击播放查看各插槽的赤字并决定是否仍要打印。',

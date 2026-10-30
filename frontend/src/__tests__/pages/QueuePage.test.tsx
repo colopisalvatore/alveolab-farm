@@ -1786,3 +1786,76 @@ describe('QueuePage', () => {
     });
   });
 });
+
+describe('QueuePage and prints started outside the queue', () => {
+  /** A farm prints from the slicer as much as from the queue. Those prints
+   *  have no queue row, so the page used to show nothing printing and a
+   *  history with only the queue's share of the work. */
+  const printer = { id: 1, name: 'P1S-2', model: 'P1S', enabled: true, created_at: '2024-01-01T00:00:00Z' };
+
+  beforeEach(() => {
+    vi.mocked(localStorage.getItem).mockImplementation(() => null);
+    server.use(
+      http.get('/api/v1/queue/', () => HttpResponse.json([])),
+      http.get('/api/v1/printers/', () => HttpResponse.json([printer])),
+      http.get('/api/v1/printers/:id/status', () =>
+        HttpResponse.json({
+          id: 1,
+          name: 'P1S-2',
+          connected: true,
+          state: 'RUNNING',
+          progress: 21,
+          remaining_time: 488,
+          subtask_name: 'Knitted Snowman',
+          current_archive_id: null,
+        }),
+      ),
+      http.get('/api/v1/queue/outside-prints', () =>
+        HttpResponse.json([
+          {
+            archive_id: 351,
+            printer_id: 1,
+            printer_name: 'P1S-2',
+            name: 'Knitted Reindeer',
+            status: 'aborted',
+            started_at: '2026-10-30T07:41:46Z',
+            completed_at: '2026-10-30T09:00:00Z',
+            created_at: '2026-10-30T07:41:46Z',
+            print_time_seconds: 4200,
+            filament_used_grams: 30,
+            filament_type: 'PLA',
+            filament_color: '#FFFFFF',
+            failure_reason: null,
+            has_thumbnail: false,
+          },
+        ]),
+      ),
+    );
+  });
+
+  it('lists a print the printer runs on its own under Currently Printing', async () => {
+    render(<QueuePage />);
+
+    const card = await screen.findByTestId('outside-queue-print');
+    expect(within(card).getByText('Knitted Snowman')).toBeInTheDocument();
+    expect(within(card).getByText('Outside the queue')).toBeInTheDocument();
+    expect(within(card).getByText('21%')).toBeInTheDocument();
+    expect(screen.getByText('Currently Printing')).toBeInTheDocument();
+    // Read-only: nothing to stop or edit from the queue.
+    expect(within(card).queryByRole('button')).toBeNull();
+  });
+
+  it('shows finished prints from the archive in the history, without a remove button', async () => {
+    const user = userEvent.setup();
+    render(<QueuePage />);
+
+    await user.click(await screen.findByRole('button', { name: /History/ }));
+
+    const name = await screen.findByText('Knitted Reindeer');
+    const row = name.closest('div.px-3') as HTMLElement;
+    expect(within(row).getByText('Outside the queue')).toBeInTheDocument();
+    expect(within(row).getAllByRole('button')).toHaveLength(1); // requeue only
+    // Clearing the history removes queue rows; there are none to remove.
+    expect(screen.queryByText('Clear History')).toBeNull();
+  });
+});

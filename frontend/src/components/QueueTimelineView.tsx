@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Clock, Layers, Printer as PrinterIcon } from
 import { formatDuration, parseUTCDate } from '../utils/date';
 import { compareQueueOrder, queueLaneKey } from '../utils/queueOrder';
 import { isBusyOnlyWaitingReason } from '../utils/waitingReason';
+import { liveOutsidePrints, type QueuePrinterStatus } from '../utils/outsideQueue';
 import type { PrintQueueItem, Printer } from '../api/client';
 import { api } from '../api/client';
 import { Button } from './Button';
@@ -42,17 +43,10 @@ interface ExternalPrint {
   progress?: number;
 }
 
-// Printer states that mean a job is on the plate (Bambu vocabulary; the
-// provider layer maps other brands onto it).
-const BUSY_STATES = new Set(['RUNNING', 'PAUSE', 'PREPARE']);
-
 interface QueueTimelineViewProps {
   queueItems: PrintQueueItem[];
   printers: Printer[];
-  printerStatuses: Record<
-    number,
-    { progress?: number; remaining_time?: number; state?: string; subtask_name?: string }
-  >;
+  printerStatuses: Record<number, QueuePrinterStatus>;
   /** `queue_shortest_first`. The bars chain in dispatch order, and dispatch
    *  order depends on it, so without it the timeline drew a queue the
    *  scheduler had no intention of running (#3043). */
@@ -117,32 +111,27 @@ export function QueueTimelineView({
   // print carries one too ("Busy: X1C-01"), and that is the chain this view
   // exists to forecast. Only a reason that needs the user takes an item off.
   // Idle-printer ASAP queues also stay off until something starts on them.
-  const externalPrints = useMemo<ExternalPrint[]>(() => {
-    const ownedByQueue = new Set(
-      queueItems.filter((i) => i.status === 'printing' && i.printer_id != null).map((i) => i.printer_id),
-    );
-    const result: ExternalPrint[] = [];
-    for (const [id, status] of Object.entries(printerStatuses)) {
-      const printerId = Number(id);
-      if (ownedByQueue.has(printerId) || !status.state || !BUSY_STATES.has(status.state)) continue;
-      const remainingMs = (status.remaining_time ?? 0) * 60 * 1000;
-      const progress = status.progress;
-      // Elapsed time is not reported; derive it from progress vs remaining,
-      // and start the bar at now when that ratio is meaningless.
-      const elapsedMs =
-        progress != null && progress > 0 && progress < 100 && remainingMs > 0
-          ? (remainingMs * progress) / (100 - progress)
-          : 0;
-      result.push({
-        printerId,
-        name: status.subtask_name || '',
-        estimatedStart: new Date(nowMs - elapsedMs),
-        estimatedEnd: new Date(nowMs + (remainingMs > 0 ? remainingMs : HOUR_MS)),
-        progress,
-      });
-    }
-    return result;
-  }, [queueItems, printerStatuses, nowMs]);
+  const externalPrints = useMemo<ExternalPrint[]>(
+    () =>
+      liveOutsidePrints(queueItems, printerStatuses).map((live) => {
+        const remainingMs = (live.remainingMinutes ?? 0) * 60 * 1000;
+        const progress = live.progress;
+        // Elapsed time is not reported; derive it from progress vs remaining,
+        // and start the bar at now when that ratio is meaningless.
+        const elapsedMs =
+          progress != null && progress > 0 && progress < 100 && remainingMs > 0
+            ? (remainingMs * progress) / (100 - progress)
+            : 0;
+        return {
+          printerId: live.printerId,
+          name: live.name,
+          estimatedStart: new Date(nowMs - elapsedMs),
+          estimatedEnd: new Date(nowMs + (remainingMs > 0 ? remainingMs : HOUR_MS)),
+          progress,
+        };
+      }),
+    [queueItems, printerStatuses, nowMs],
+  );
 
   const events = useMemo<ScheduleEvent[]>(() => {
     const result: ScheduleEvent[] = [];

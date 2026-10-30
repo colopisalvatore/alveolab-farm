@@ -228,6 +228,9 @@ export const handlers = [
     return HttpResponse.json(printer);
   }),
 
+  // Finished prints no queue row owns (archives of slicer prints).
+  http.get('/api/v1/queue/outside-prints', () => HttpResponse.json([])),
+
   http.get('/api/v1/printers/:id/status', ({ params }) => {
     return HttpResponse.json({
       id: Number(params.id),

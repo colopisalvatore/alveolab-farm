@@ -82,6 +82,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { QueueStatsBar } from '../components/QueueStatsBar';
 import { CompactHistoryRow } from '../components/CompactHistoryRow';
 import { QueueTimelineView } from '../components/QueueTimelineView';
+import { OutsideQueuePrintCard } from '../components/OutsideQueuePrintCard';
+import {
+  isOutsideQueueRow,
+  liveOutsidePrints,
+  outsidePrintAsHistoryRow,
+  type QueuePrinterStatus,
+} from '../utils/outsideQueue';
 import { compareQueueOrder } from '../utils/queueOrder';
 import { BatchOrdersView } from '../components/BatchOrdersView';
 import { buildLoadedFilaments, type LoadedFilament } from '../hooks/useFilamentMapping';
@@ -1555,6 +1562,7 @@ function HistorySection({
               <CompactHistoryRow
                 key={row.item.id}
                 item={row.item}
+                outsideQueue={isOutsideQueueRow(row.item)}
                 onRemove={() => onRemove(row.item)}
                 onRequeue={() => onRequeue(row.item)}
                 timeFormat={timeFormat}
@@ -2195,11 +2203,12 @@ export function QueuePage() {
     activeItems.forEach(item => {
       if (item.printer_id) ids.add(item.printer_id);
     });
-    // The timeline also draws prints started outside the queue, so it needs
-    // every printer's status, not just the ones with queue rows.
-    if (activeTab === 'timeline') printers?.forEach(p => ids.add(p.id));
+    // Prints started outside the queue (slicer, touchscreen) show up in the
+    // printing section and on the timeline, so every printer's status is
+    // needed, not just the ones with queue rows.
+    printers?.forEach(p => ids.add(p.id));
     return Array.from(ids);
-  }, [activeItems, activeTab, printers]);
+  }, [activeItems, printers]);
 
   // Fetch printer statuses for printers with active jobs
   const printerStatusQueries = useQueries({
@@ -2224,10 +2233,7 @@ export function QueuePage() {
 
   // Build a map of printer_id -> full status for timeline view
   const printerStatusMap = useMemo(() => {
-    const map: Record<
-      number,
-      { progress?: number; remaining_time?: number; state?: string; subtask_name?: string }
-    > = {};
+    const map: Record<number, QueuePrinterStatus> = {};
     activePrinterIds.forEach((printerId, index) => {
       const result = printerStatusQueries[index];
       if (result?.data) {
@@ -2236,14 +2242,38 @@ export function QueuePage() {
           remaining_time: result.data.remaining_time ?? undefined,
           state: result.data.state ?? undefined,
           subtask_name: result.data.subtask_name ?? undefined,
+          current_archive_id: result.data.current_archive_id ?? undefined,
         };
       }
     });
     return map;
   }, [activePrinterIds, printerStatusQueries]);
 
+  const outsideLive = useMemo(() => {
+    if (filterStatus && filterStatus !== 'printing') return [];
+    return liveOutsidePrints(queue || [], printerStatusMap).filter((print) => {
+      if (filterPrinter && print.printerId !== filterPrinter) return false;
+      if (filterLocation) {
+        return printers?.find(p => p.id === print.printerId)?.location === filterLocation;
+      }
+      return true;
+    });
+  }, [queue, printerStatusMap, filterStatus, filterPrinter, filterLocation, printers]);
+
+  // Finished prints no queue row owns, read from their archives, so the
+  // history shows everything the printers did and not only the queue's part.
+  const { data: outsidePrints } = useQuery({
+    queryKey: ['queue', 'outside-prints', filterPrinter],
+    queryFn: () => api.getOutsideQueuePrints(filterPrinter || undefined),
+    refetchInterval: 30000,
+  });
+
   const historyItems = useMemo(() => {
     let items = queue?.filter(i => ['completed', 'failed', 'skipped', 'cancelled'].includes(i.status)) || [];
+    const outsideRows = (outsidePrints || [])
+      .map(outsidePrintAsHistoryRow)
+      .filter(row => !filterStatus || row.status === filterStatus);
+    items = [...items, ...outsideRows];
     if (filterLocation) {
       items = items.filter(matchesLocationFilter);
     }
@@ -2261,7 +2291,14 @@ export function QueuePage() {
       }
       return historySortAsc ? -cmp : cmp;
     });
-  }, [queue, historySortBy, historySortAsc, matchesLocationFilter, filterLocation]);
+  }, [queue, outsidePrints, filterStatus, historySortBy, historySortAsc, matchesLocationFilter, filterLocation]);
+
+  // "Clear history" removes queue rows only; prints read from their archives
+  // stay, so they are not part of what it offers to clear.
+  const queueHistoryCount = useMemo(
+    () => historyItems.filter(i => !isOutsideQueueRow(i)).length,
+    [historyItems],
+  );
 
   // Calculate total queue time
   const totalQueueTime = useMemo(() => {
@@ -2605,7 +2642,7 @@ export function QueuePage() {
           live in their own tabs so the queue page stays focused. */}
       <div className="flex gap-1 border-b border-bambu-dark-tertiary mb-6 overflow-x-auto">
         {([
-          { id: 'queue' as const, label: t('queue.tabs.queue'), icon: Clock, count: pendingItems.length + activeItems.length },
+          { id: 'queue' as const, label: t('queue.tabs.queue'), icon: Clock, count: pendingItems.length + activeItems.length + outsideLive.length },
           { id: 'batches' as const, label: t('queue.tabs.batches'), icon: Package, count: activeBatchCount },
           { id: 'history' as const, label: t('queue.tabs.history'), icon: ListOrdered, count: historyItems.length },
           { id: 'timeline' as const, label: t('queue.tabs.timeline'), icon: GanttChart, count: null as number | null },
@@ -2638,7 +2675,7 @@ export function QueuePage() {
 
       {/* Summary Stats — about the print queue, not pipelines. */}
       {activeTab !== 'pipelines' && activeTab !== 'batches' && <QueueStatsBar
-        activeCount={activeItems.length}
+        activeCount={activeItems.length + outsideLive.length}
         pendingCount={pendingItems.length}
         totalTime={totalQueueTime}
         totalWeight={totalWeight}
@@ -2734,7 +2771,7 @@ export function QueuePage() {
 
         <div className="hidden sm:block flex-1" />
 
-        {activeTab === 'history' && historyItems.length > 0 && (
+        {activeTab === 'history' && queueHistoryCount > 0 && (
           <Button
             className="w-full sm:w-auto"
             variant="secondary"
@@ -2803,7 +2840,7 @@ export function QueuePage() {
         <BatchOrdersView hasPermission={hasPermission} t={t} focusBatchId={focusBatchId} />
       ) : isLoading ? (
         <div className="text-center py-12 text-bambu-gray">{t('common.loading')}</div>
-      ) : queue?.length === 0 && activeTab !== 'timeline' ? (
+      ) : queue?.length === 0 && activeTab !== 'timeline' && outsideLive.length === 0 && historyItems.length === 0 ? (
         <Card className="p-12 text-center border-dashed">
           <Calendar className="w-16 h-16 text-bambu-gray mx-auto mb-4 opacity-50" />
           <h3 className="text-xl font-medium text-white mb-2">{t('queue.empty.title')}</h3>
@@ -2850,7 +2887,7 @@ export function QueuePage() {
       ) : (
         <div className="space-y-6 sm:space-y-8">
           {/* Active Prints */}
-          {activeItems.length > 0 && (
+          {(activeItems.length > 0 || outsideLive.length > 0) && (
             <div>
               <h2 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
@@ -2871,6 +2908,14 @@ export function QueuePage() {
                     hasPermission={hasPermission}
                     canModify={canModify}
                     printerState={item.printer_id ? printerStateMap[item.printer_id] : null}
+                    t={t}
+                  />
+                ))}
+                {outsideLive.map((print) => (
+                  <OutsideQueuePrintCard
+                    key={`outside-${print.printerId}`}
+                    print={print}
+                    printerName={printers?.find(p => p.id === print.printerId)?.name}
                     t={t}
                   />
                 ))}
@@ -3202,7 +3247,7 @@ export function QueuePage() {
       {showClearHistoryConfirm && (
         <ConfirmModal
           title={t('queue.confirm.clearHistoryTitle')}
-          message={t('queue.confirm.clearHistoryMessage', { count: historyItems.length })}
+          message={t('queue.confirm.clearHistoryMessage', { count: queueHistoryCount })}
           confirmText={t('queue.clearHistory')}
           variant="danger"
           onConfirm={() => {

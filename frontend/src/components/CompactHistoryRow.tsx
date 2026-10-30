@@ -43,6 +43,7 @@ export function CompactHistoryRow({
   timeFormat = 'system',
   hasPermission,
   canModify,
+  outsideQueue = false,
   t,
 }: {
   item: PrintQueueItem;
@@ -51,6 +52,9 @@ export function CompactHistoryRow({
   timeFormat?: TimeFormat;
   hasPermission: (permission: Permission) => boolean;
   canModify: (resource: 'queue' | 'archives' | 'library', action: 'update' | 'delete' | 'reprint', createdById: number | null | undefined) => boolean;
+  /** A print started outside the queue, read from its archive. It has no
+   *  queue row to remove; it can still be put in the queue again. */
+  outsideQueue?: boolean;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const config = STATUS_CONFIG[item.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.cancelled;
@@ -106,6 +110,12 @@ export function CompactHistoryRow({
           {displayName}
         </span>
 
+        {outsideQueue && (
+          <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-700 dark:text-purple-300">
+            {t('queue.timeline.outsideQueue')}
+          </span>
+        )}
+
         <span
           className="text-xs text-bambu-gray shrink-0"
           title={completedTime ?? undefined}
@@ -124,7 +134,7 @@ export function CompactHistoryRow({
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </Button>
-          <Button
+          {!outsideQueue && <Button
             variant="ghost"
             size="sm"
             onClick={onRemove}
@@ -133,7 +143,7 @@ export function CompactHistoryRow({
             className="p-1.5"
           >
             <Trash2 className="w-3.5 h-3.5" />
-          </Button>
+          </Button>}
         </div>
       </div>
 

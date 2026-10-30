@@ -1340,6 +1340,11 @@ export default {
 
   // Queue page
   queue: {
+    outsideQueue: {
+      openPrinter: 'Printerpagina openen',
+      paused: 'Gepauzeerd',
+      remaining: 'nog {{time}}',
+    },
     title: 'Afdrukwachtrij',
     subtitle: 'Plan en beheer je afdruktaken',
     filamentShort: {

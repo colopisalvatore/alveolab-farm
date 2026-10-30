@@ -1279,6 +1279,11 @@ export default {
     },
   },
   queue: {
+    outsideQueue: {
+      openPrinter: 'Открыть страницу принтеров',
+      paused: 'На паузе',
+      remaining: 'осталось {{time}}',
+    },
     title: "Очередь печати",
     subtitle: "Планирование и управление заданиями печати",
     filamentShort: {

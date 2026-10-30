@@ -1340,6 +1340,11 @@ export default {
 
   // Queue page
   queue: {
+    outsideQueue: {
+      openPrinter: 'Open the printers page',
+      paused: 'Paused',
+      remaining: '{{time}} left',
+    },
     title: 'Print Queue',
     subtitle: 'Schedule and manage your print jobs',
     filamentShort: {

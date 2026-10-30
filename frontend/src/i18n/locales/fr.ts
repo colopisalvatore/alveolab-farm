@@ -1330,6 +1330,11 @@ export default {
 
   // Queue page
   queue: {
+    outsideQueue: {
+      openPrinter: 'Ouvrir la page des imprimantes',
+      paused: 'En pause',
+      remaining: 'reste {{time}}',
+    },
     filamentShort: {
       rowBadge: 'Filament insuffisant pour la bobine assignee',
       rowTooltip: "Le planificateur a signale cet element. Cliquez sur Lecture pour voir le deficit par emplacement et decider de lancer quand meme l'impression.",

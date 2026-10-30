@@ -1330,6 +1330,11 @@ export default {
   },
 
   queue: {
+    outsideQueue: {
+      openPrinter: 'Yazıcılar sayfasını aç',
+      paused: 'Duraklatıldı',
+      remaining: '{{time}} kaldı',
+    },
     title: 'Baskı Kuyruğu',
     subtitle: 'Baskı işlerinizi zamanlayın ve yönetin',
     filamentShort: {

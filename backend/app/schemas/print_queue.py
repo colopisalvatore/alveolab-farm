@@ -509,3 +509,24 @@ class PrintBatchResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class OutsideQueuePrintResponse(BaseModel):
+    """A finished print that no queue row owns: started from the slicer, the
+    touchscreen or the archive's reprint button. Read from its archive."""
+
+    archive_id: int
+    printer_id: int | None = None
+    printer_name: str | None = None
+    name: str
+    # The archive's own status: completed, failed, cancelled or aborted.
+    status: str
+    started_at: UTCDatetime = None
+    completed_at: UTCDatetime = None
+    created_at: UTCDatetime = None
+    print_time_seconds: int | None = None
+    filament_used_grams: float | None = None
+    filament_type: str | None = None
+    filament_color: str | None = None
+    failure_reason: str | None = None
+    has_thumbnail: bool = False

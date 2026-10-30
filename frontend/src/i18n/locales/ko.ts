@@ -1282,6 +1282,11 @@ export default {
   },
 
   queue: {
+    outsideQueue: {
+      openPrinter: '프린터 페이지 열기',
+      paused: '일시 정지됨',
+      remaining: '{{time}} 남음',
+    },
     title: '인쇄 대기열',
     subtitle: '인쇄 작업을 예약하고 관리하세요',
     editQueueItem: '대기열 항목 편집',
