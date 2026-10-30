@@ -1620,6 +1620,7 @@ export default {
       noData: 'Nenhuma impressão agendada para este dia',
       nothingCommitted: 'Sem programações confirmadas nesta janela. Itens preparados, itens em espera e trabalhos ASAP em impressoras ociosas não são mostrados — defina um horário agendado ou libere um item preparado para vê-lo aqui.',
       allDoneBy: 'Todas as impressões concluídas até {{time}}',
+      outsideQueue: 'Fora da fila',
       staged: 'Preparado',
       filterAll: 'Mostrar tudo',
       filterPrinting: 'Imprimindo',

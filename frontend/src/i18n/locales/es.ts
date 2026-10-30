@@ -1620,6 +1620,7 @@ export default {
       noData: 'No hay impresiones programadas para este día',
       nothingCommitted: 'No hay programaciones comprometidas en esta ventana. Los elementos preparados, los elementos en espera y los trabajos ASAP en impresoras inactivas no se muestran — establece una hora programada o libera un elemento preparado para verlo aquí.',
       allDoneBy: 'Todas las impresiones estimadas para las {{time}}',
+      outsideQueue: 'Fuera de la cola',
       staged: 'Preparado',
       filterAll: 'Mostrar todo',
       filterPrinting: 'Imprimiendo',

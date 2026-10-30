@@ -1636,6 +1636,7 @@ export default {
       noData: 'Geen geplande afdrukken voor deze dag',
       nothingCommitted: 'Geen vastgelegde planningen in dit venster. Gereedstaande items, wachtende items en ZSM-taken op inactieve printers worden niet getoond — stel een geplande tijd in of geef een gereedstaand item vrij om het hier te zien.',
       allDoneBy: 'Alle afdrukken naar verwachting klaar om {{time}}',
+      outsideQueue: 'Buiten de wachtrij',
       staged: 'Gereed voor handmatige start',
       filterAll: 'Alles tonen',
       filterPrinting: 'Bezig met afdrukken',

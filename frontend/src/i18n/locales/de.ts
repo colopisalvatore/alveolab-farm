@@ -1620,6 +1620,7 @@ export default {
       noData: 'Keine geplanten Drucke für diesen Tag',
       nothingCommitted: 'Keine festgelegten Pläne in diesem Zeitfenster. Vorgemerkte Einträge, wartende Einträge und ASAP-Aufträge auf inaktiven Druckern werden nicht angezeigt — leg eine geplante Zeit fest oder gib einen vorgemerkten Eintrag frei, damit er hier erscheint.',
       allDoneBy: 'Alle Drucke voraussichtlich fertig um {{time}}',
+      outsideQueue: 'Außerhalb der Warteschlange',
       staged: 'Bereitgestellt',
       filterAll: 'Alle anzeigen',
       filterPrinting: 'Druckend',

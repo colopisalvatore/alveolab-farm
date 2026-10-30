@@ -1636,6 +1636,7 @@ export default {
       noData: 'Inga schemalagda utskrifter för denna dag',
       nothingCommitted: 'Inga fastställda scheman i detta fönster. Förberedda poster, väntande poster och ASAP-jobb på inaktiva skrivare visas inte — ange en schemalagd tid eller släpp en förberedd post för att se den här.',
       allDoneBy: 'Alla utskrifter beräknas vara klara till {{time}}',
+      outsideQueue: 'Utanför kön',
       staged: 'Förberedd',
       filterAll: 'Visa alla',
       filterPrinting: 'Skriver ut',

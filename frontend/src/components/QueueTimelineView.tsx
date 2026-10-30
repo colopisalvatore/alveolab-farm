@@ -11,7 +11,8 @@ import { Button } from './Button';
  *  (plus one per active target_model and one for unassigned items). Each
  *  pending or printing job is rendered as a colored bar positioned by its
  *  predicted start time, width = predicted duration. A vertical NOW line
- *  marks current time. Hover a bar for details, click to edit/stop. */
+ *  marks current time. Hover a bar for details, click to edit/stop.
+ *  Prints a printer runs outside the queue get a dashed, read-only bar. */
 
 const HOUR_MS = 60 * 60 * 1000;
 const RANGE_HOURS = 24;
@@ -30,10 +31,28 @@ interface ScheduleEvent {
   type: 'printing' | 'queued';
 }
 
+/** A print the printer reports that no queue row owns: started from the
+ *  slicer, the touchscreen or another tool. Drawn so the lane shows the
+ *  printer is busy, never clickable (there is no row to edit or stop). */
+interface ExternalPrint {
+  printerId: number;
+  name: string;
+  estimatedStart: Date;
+  estimatedEnd: Date;
+  progress?: number;
+}
+
+// Printer states that mean a job is on the plate (Bambu vocabulary; the
+// provider layer maps other brands onto it).
+const BUSY_STATES = new Set(['RUNNING', 'PAUSE', 'PREPARE']);
+
 interface QueueTimelineViewProps {
   queueItems: PrintQueueItem[];
   printers: Printer[];
-  printerStatuses: Record<number, { progress?: number; remaining_time?: number; state?: string }>;
+  printerStatuses: Record<
+    number,
+    { progress?: number; remaining_time?: number; state?: string; subtask_name?: string }
+  >;
   /** `queue_shortest_first`. The bars chain in dispatch order, and dispatch
    *  order depends on it, so without it the timeline drew a queue the
    *  scheduler had no intention of running (#3043). */
@@ -98,6 +117,33 @@ export function QueueTimelineView({
   // print carries one too ("Busy: X1C-01"), and that is the chain this view
   // exists to forecast. Only a reason that needs the user takes an item off.
   // Idle-printer ASAP queues also stay off until something starts on them.
+  const externalPrints = useMemo<ExternalPrint[]>(() => {
+    const ownedByQueue = new Set(
+      queueItems.filter((i) => i.status === 'printing' && i.printer_id != null).map((i) => i.printer_id),
+    );
+    const result: ExternalPrint[] = [];
+    for (const [id, status] of Object.entries(printerStatuses)) {
+      const printerId = Number(id);
+      if (ownedByQueue.has(printerId) || !status.state || !BUSY_STATES.has(status.state)) continue;
+      const remainingMs = (status.remaining_time ?? 0) * 60 * 1000;
+      const progress = status.progress;
+      // Elapsed time is not reported; derive it from progress vs remaining,
+      // and start the bar at now when that ratio is meaningless.
+      const elapsedMs =
+        progress != null && progress > 0 && progress < 100 && remainingMs > 0
+          ? (remainingMs * progress) / (100 - progress)
+          : 0;
+      result.push({
+        printerId,
+        name: status.subtask_name || '',
+        estimatedStart: new Date(nowMs - elapsedMs),
+        estimatedEnd: new Date(nowMs + (remainingMs > 0 ? remainingMs : HOUR_MS)),
+        progress,
+      });
+    }
+    return result;
+  }, [queueItems, printerStatuses, nowMs]);
+
   const events = useMemo<ScheduleEvent[]>(() => {
     const result: ScheduleEvent[] = [];
     const pendingByLaneKey = new Map<string, PrintQueueItem[]>();
@@ -106,6 +152,13 @@ export function QueueTimelineView({
     const lanesWithActive = new Set<string>();
     // Chain-end timestamp per lane (where the next pending item's bar starts).
     const chainEndByLane = new Map<string, number>();
+    // A print started outside the queue keeps the printer busy just the same:
+    // queued items for that printer wait for it to end.
+    for (const ext of externalPrints) {
+      const lk = `printer:${ext.printerId}`;
+      lanesWithActive.add(lk);
+      chainEndByLane.set(lk, Math.max(chainEndByLane.get(lk) ?? nowMs, ext.estimatedEnd.getTime()));
+    }
 
     for (const item of queueItems) {
       if (item.status === 'printing') {
@@ -173,7 +226,7 @@ export function QueueTimelineView({
       }
     }
     return result;
-  }, [queueItems, printerStatuses, nowMs, sjfEnabled]);
+  }, [queueItems, printerStatuses, externalPrints, nowMs, sjfEnabled]);
 
   // Lanes: every printer + every distinct target_model with queue activity
   // + an "unassigned" lane if needed. Printers that have NO events queued
@@ -251,8 +304,15 @@ export function QueueTimelineView({
   const allDoneBy = useMemo(() => {
     let latest = 0;
     for (const ev of events) latest = Math.max(latest, ev.estimatedEnd.getTime());
+    for (const ext of externalPrints) latest = Math.max(latest, ext.estimatedEnd.getTime());
     return latest > 0 ? new Date(latest) : null;
-  }, [events]);
+  }, [events, externalPrints]);
+
+  const externalByPrinter = useMemo(() => {
+    const map = new Map<number, ExternalPrint>();
+    for (const ext of externalPrints) map.set(ext.printerId, ext);
+    return map;
+  }, [externalPrints]);
 
   const trackRef = useRef<HTMLDivElement | null>(null);
 
@@ -319,7 +379,7 @@ export function QueueTimelineView({
           committed (no scheduled_time / no active print to chain off).
           Without this, users see striped lanes with no bars and assume the
           timeline is broken — common confusion from the GHSA-r2qv era. */}
-      {lanes.length > 0 && events.length === 0 && (
+      {lanes.length > 0 && events.length === 0 && externalPrints.length === 0 && (
         <div className="mb-4 p-3 rounded-lg border border-bambu-dark-tertiary bg-bambu-dark/40 text-xs text-bambu-gray">
           {t('queue.timeline.nothingCommitted')}
         </div>
@@ -354,6 +414,7 @@ export function QueueTimelineView({
           <div ref={trackRef} className="relative">
             {lanes.map((lane) => {
               const laneEvents = eventsByLane.get(lane.key) ?? [];
+              const external = lane.printerId != null ? externalByPrinter.get(lane.printerId) : undefined;
               return (
                 <div key={lane.key} className="flex border-b border-bambu-dark-tertiary/40 last:border-b-0">
                   <div className="w-32 sm:w-40 shrink-0 px-3 py-3 border-r border-bambu-dark-tertiary flex items-center gap-2">
@@ -389,6 +450,51 @@ export function QueueTimelineView({
                       }}
                       aria-hidden
                     />
+
+                    {external && (() => {
+                      const startMs = Math.max(rangeStartMs, external.estimatedStart.getTime());
+                      const endMs = Math.min(rangeEndMs, external.estimatedEnd.getTime());
+                      if (endMs <= rangeStartMs || startMs >= rangeEndMs) return null;
+                      const leftPct = ((startMs - rangeStartMs) / RANGE_MS) * 100;
+                      const widthPct = ((endMs - startMs) / RANGE_MS) * 100;
+                      const label = t('queue.timeline.outsideQueue');
+                      const tooltip = [
+                        external.name || label,
+                        `${formatTooltipTime(external.estimatedStart)} → ${formatTooltipTime(external.estimatedEnd)}`,
+                        external.progress != null ? `${Math.round(external.progress)}%` : null,
+                        external.name ? label : null,
+                      ].filter(Boolean).join(' · ');
+                      return (
+                        <div
+                          data-testid="timeline-external-print"
+                          title={tooltip}
+                          className="absolute rounded-md overflow-hidden flex items-center gap-1.5 px-1.5 bg-purple-500/20 border border-dashed border-purple-400/60"
+                          style={{
+                            left: `${leftPct}%`,
+                            width: `max(${MIN_BAR_PX}px, ${widthPct}%)`,
+                            top: 8,
+                            height: LANE_BAR_HEIGHT_PX,
+                          }}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs text-white font-medium truncate leading-tight">
+                              {external.name || label}
+                            </div>
+                            <div className="text-[10px] text-bambu-gray truncate leading-tight">
+                              {label}
+                              {external.progress != null ? ` · ${Math.round(external.progress)}%` : ''}
+                            </div>
+                          </div>
+                          {external.progress != null && (
+                            <div
+                              className="absolute bottom-0 left-0 h-0.5 bg-purple-300"
+                              style={{ width: `${external.progress}%` }}
+                              aria-hidden
+                            />
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Job bars */}
                     {laneEvents.map((ev) => {

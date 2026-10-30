@@ -1636,6 +1636,7 @@ export default {
       noData: 'No scheduled prints for this day',
       nothingCommitted: 'No committed schedules in this window. Staged items, waiting items, and ASAP jobs on idle printers are not shown — set a scheduled time or release a staged item to see it here.',
       allDoneBy: 'All prints estimated done by {{time}}',
+      outsideQueue: 'Outside the queue',
       staged: 'Staged',
       filterAll: 'Show All',
       filterPrinting: 'Printing',

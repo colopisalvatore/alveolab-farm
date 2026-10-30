@@ -1620,6 +1620,7 @@ export default {
       noData: '当天没有计划的打印任务',
       nothingCommitted: '此时间窗口内没有已确定的计划。暂存项目、等待项目以及空闲打印机上的 ASAP 任务不会显示 — 设置计划时间或释放暂存项目以在此处查看。',
       allDoneBy: '所有打印预计在 {{time}} 前完成',
+      outsideQueue: '队列外',
       staged: '暂存',
       filterAll: '全部显示',
       filterPrinting: '打印中',

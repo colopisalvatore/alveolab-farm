@@ -1620,6 +1620,7 @@ export default {
       noData: '當天沒有計畫的列印任務',
       nothingCommitted: '此時間視窗內沒有已確定的排程。暫存項目、等待項目以及閒置印表機上的 ASAP 任務不會顯示 — 設定排程時間或釋放暫存項目即可在此處查看。',
       allDoneBy: '所有列印預計在 {{time}} 前完成',
+      outsideQueue: '佇列外',
       staged: '暫存',
       filterAll: '全部顯示',
       filterPrinting: '列印中',

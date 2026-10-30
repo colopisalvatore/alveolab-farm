@@ -2195,8 +2195,11 @@ export function QueuePage() {
     activeItems.forEach(item => {
       if (item.printer_id) ids.add(item.printer_id);
     });
+    // The timeline also draws prints started outside the queue, so it needs
+    // every printer's status, not just the ones with queue rows.
+    if (activeTab === 'timeline') printers?.forEach(p => ids.add(p.id));
     return Array.from(ids);
-  }, [activeItems]);
+  }, [activeItems, activeTab, printers]);
 
   // Fetch printer statuses for printers with active jobs
   const printerStatusQueries = useQueries({
@@ -2221,7 +2224,10 @@ export function QueuePage() {
 
   // Build a map of printer_id -> full status for timeline view
   const printerStatusMap = useMemo(() => {
-    const map: Record<number, { progress?: number; remaining_time?: number; state?: string }> = {};
+    const map: Record<
+      number,
+      { progress?: number; remaining_time?: number; state?: string; subtask_name?: string }
+    > = {};
     activePrinterIds.forEach((printerId, index) => {
       const result = printerStatusQueries[index];
       if (result?.data) {
@@ -2229,6 +2235,7 @@ export function QueuePage() {
           progress: result.data.progress ?? undefined,
           remaining_time: result.data.remaining_time ?? undefined,
           state: result.data.state ?? undefined,
+          subtask_name: result.data.subtask_name ?? undefined,
         };
       }
     });
@@ -2796,7 +2803,7 @@ export function QueuePage() {
         <BatchOrdersView hasPermission={hasPermission} t={t} focusBatchId={focusBatchId} />
       ) : isLoading ? (
         <div className="text-center py-12 text-bambu-gray">{t('common.loading')}</div>
-      ) : queue?.length === 0 ? (
+      ) : queue?.length === 0 && activeTab !== 'timeline' ? (
         <Card className="p-12 text-center border-dashed">
           <Calendar className="w-16 h-16 text-bambu-gray mx-auto mb-4 opacity-50" />
           <h3 className="text-xl font-medium text-white mb-2">{t('queue.empty.title')}</h3>

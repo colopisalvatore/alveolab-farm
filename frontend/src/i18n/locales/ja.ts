@@ -1619,6 +1619,7 @@ export default {
       noData: 'この日の予定された印刷はありません',
       nothingCommitted: 'この時間枠に確定したスケジュールはありません。手動開始のステージ済み項目、待機中の項目、アイドル状態のプリンターのASAPジョブは表示されません — 予定時刻を設定するか、ステージ済み項目をリリースすると表示されます。',
       allDoneBy: 'すべての印刷は {{time}} までに完了予定',
+      outsideQueue: 'キュー外',
       staged: 'ステージング',
       filterAll: 'すべて表示',
       filterPrinting: '印刷中',

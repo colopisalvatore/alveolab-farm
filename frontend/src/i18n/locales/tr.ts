@@ -1620,6 +1620,7 @@ export default {
       noData: 'Bu gün için zamanlanmış baskı yok',
       nothingCommitted: 'Bu pencerede onaylanmış programlar yok. Hazırlanmış öğeler, beklemedeki öğeler ve boştaki yazıcılardaki ASAP işleri gösterilmez — burada görmek için zamanlanmış bir saat belirleyin veya hazırlanmış bir öğeyi serbest bırakın.',
       allDoneBy: 'Tüm baskıların {{time}}\'e kadar bitmesi tahmin ediliyor',
+      outsideQueue: 'Kuyruk dışı',
       staged: 'Hazırlandı',
       filterAll: 'Tümünü Göster',
       filterPrinting: 'Yazdırılıyor',

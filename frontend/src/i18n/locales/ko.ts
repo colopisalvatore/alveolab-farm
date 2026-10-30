@@ -1544,6 +1544,7 @@ export default {
       noData: '이 날에 예약된 인쇄 없음',
       nothingCommitted: '이 시간 창에 확정된 일정이 없습니다. 대기 중인 항목, 보류된 항목, 유휴 프린터의 ASAP 작업은 표시되지 않습니다 — 예약 시간을 설정하거나 대기 항목을 릴리스하면 여기에 표시됩니다.',
       allDoneBy: '모든 인쇄 예상 완료 시간: {{time}}',
+      outsideQueue: '대기열 외',
       staged: '준비됨',
       filterAll: '모두 표시',
       filterPrinting: '인쇄 중',

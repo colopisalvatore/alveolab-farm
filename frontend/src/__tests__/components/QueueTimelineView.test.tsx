@@ -171,3 +171,56 @@ describe('QueueTimelineView and the scheduler waiting reasons (#3074)', () => {
     }
   });
 });
+
+describe('QueueTimelineView and prints started outside the queue', () => {
+  /** A farm prints from the slicer as much as from the queue. Those prints
+   *  have no queue row, so the timeline used to show idle lanes while every
+   *  printer was busy. */
+  const farm = [
+    { id: 1, name: 'Workshop X1C', model: 'X1C' },
+    { id: 2, name: 'Centauri 2', model: 'Centauri 2' },
+  ] as unknown as Printer[];
+
+  function renderFarm(items: PrintQueueItem[], statuses: Record<number, Record<string, unknown>>) {
+    render(
+      <QueueTimelineView
+        queueItems={items}
+        printers={farm}
+        printerStatuses={statuses}
+        sjfEnabled={false}
+        onItemClick={() => {}}
+        t={(key: string) => key}
+      />,
+    );
+  }
+
+  it('draws a read-only bar for a print the printer runs on its own', () => {
+    renderFarm([], {
+      1: { state: 'IDLE' },
+      2: { state: 'RUNNING', progress: 78, remaining_time: 69, subtask_name: 'Kawasaki.gcode' },
+    });
+    const bars = screen.getAllByTestId('timeline-external-print');
+    expect(bars).toHaveLength(1);
+    expect(bars[0].getAttribute('title')).toMatch(/^Kawasaki\.gcode · .* · 78% · queue\.timeline\.outsideQueue$/);
+    expect(screen.queryByRole('button', { name: /Kawasaki/ })).toBeNull();
+    expect(screen.queryByText('queue.timeline.nothingCommitted')).toBeNull();
+  });
+
+  it('chains queued items behind it', () => {
+    renderFarm([pending(1, 'Next job', 1, HOUR, { printer_id: 2 })], {
+      2: { state: 'RUNNING', progress: 50, remaining_time: 120, subtask_name: 'From Orca' },
+    });
+    const next = screen.getAllByRole('button').find(el => el.getAttribute('title')?.startsWith('Next job'));
+    const external = screen.getByTestId('timeline-external-print');
+    expect(next).toBeDefined();
+    expect(parseFloat(next!.style.left)).toBeGreaterThan(parseFloat(external.style.left));
+  });
+
+  it('leaves a print the queue started to the queue bar', () => {
+    renderFarm([{ ...running, printer_id: 1 } as PrintQueueItem], {
+      1: { state: 'RUNNING', progress: 50, remaining_time: 30, subtask_name: 'Running now' },
+    });
+    expect(screen.queryByTestId('timeline-external-print')).toBeNull();
+    expect(barsLeftToRight()).toEqual(['Running now']);
+  });
+});

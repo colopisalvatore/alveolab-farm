@@ -1620,6 +1620,7 @@ export default {
       noData: 'Aucune impression planifiée pour ce jour',
       nothingCommitted: 'Aucun horaire confirmé dans cette fenêtre. Les éléments en attente d’action, les éléments bloqués et les jobs ASAP sur des imprimantes inactives ne sont pas affichés — définissez une heure planifiée ou libérez un élément en attente pour qu’il apparaisse ici.',
       allDoneBy: 'Toutes les impressions terminées vers {{time}}',
+      outsideQueue: 'Hors de la file',
       staged: 'En attente',
       filterAll: 'Tout afficher',
       filterPrinting: 'En cours',

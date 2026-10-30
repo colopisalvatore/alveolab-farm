@@ -1620,6 +1620,7 @@ export default {
       noData: 'Nessuna stampa programmata per questo giorno',
       nothingCommitted: 'Nessuna pianificazione confermata in questa finestra. Elementi preparati, in attesa e ASAP su stampanti inattive non sono mostrati — imposta un orario pianificato o rilascia un elemento preparato per vederlo qui.',
       allDoneBy: 'Tutte le stampe completate entro le {{time}}',
+      outsideQueue: 'Fuori dalla coda',
       staged: 'In attesa',
       filterAll: 'Mostra tutto',
       filterPrinting: 'In stampa',
