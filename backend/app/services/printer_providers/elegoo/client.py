@@ -162,6 +162,12 @@ class ElegooCC2Client:
     HEARTBEAT_INTERVAL = p.HEARTBEAT_INTERVAL_SECONDS
     REGISTER_TIMEOUT = p.REGISTER_TIMEOUT_SECONDS
     COMMAND_TIMEOUT = 10.0
+    # A resume (1023) sent to firmware 02.01.01.04 got no reply within 10 s
+    # although the printer went resuming -> printing about 15 s later
+    # (HW-M4-05, 31/10/2026). It waits longer and also accepts the printer's
+    # own state change as its answer.
+    RESUME_TIMEOUT = 30.0
+    CONFIRM_POLL_INTERVAL = 0.25
     LOG_CAPACITY = 500
 
     def __init__(
@@ -359,10 +365,37 @@ class ElegooCC2Client:
 
     # --- Job commands (M4) -------------------------------------------------------
 
+    def _wait_for_reply(
+        self, pending: _PendingCommand, timeout: float, confirm_states: frozenset[JobState] | None
+    ) -> bool | None:
+        """True on a reply, None when the printer reported one of *confirm_states* first, False on timeout."""
+        if not confirm_states:
+            return pending.event.wait(timeout)
+        deadline = time.monotonic() + timeout
+        while True:
+            if self._telemetry.job_state in confirm_states:
+                # A reply racing the state change still wins: it carries the error code.
+                return True if pending.event.is_set() else None
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            if pending.event.wait(min(self.CONFIRM_POLL_INTERVAL, remaining)):
+                return True
+
     def _send_job_command(
-        self, method: int, params: dict | None = None, timeout: float | None = None, build=p.build_job_request
+        self,
+        method: int,
+        params: dict | None = None,
+        timeout: float | None = None,
+        build=p.build_job_request,
+        confirm_states: frozenset[JobState] | None = None,
     ) -> CommandOutcome:
-        """Publish one job (or, with *build*, CANVAS) command (QoS 0, never re-sent) and wait for its reply."""
+        """Publish one job (or, with *build*, CANVAS) command (QoS 0, never re-sent) and wait for its reply.
+
+        With *confirm_states*, the printer reporting one of those job states
+        while we wait counts as acceptance: some commands get no reply even
+        though the printer carries them out.
+        """
         with self._lock:
             client = self._client
             if client is None or not self._registered or self._connection is not ConnectionStatus.ONLINE:
@@ -381,7 +414,19 @@ class ElegooCC2Client:
                 return CommandOutcome(COMMAND_NOT_SENT, method, message="publish failed")
             self._record(self.topics.api_request, "out", json.loads(message))
             logger.info("[ELEGOO %s] sent job command %s (id %s)", self.serial_number, method, request_id)
-            if not pending.event.wait(self.COMMAND_TIMEOUT if timeout is None else timeout):
+            replied = self._wait_for_reply(
+                pending, self.COMMAND_TIMEOUT if timeout is None else timeout, confirm_states
+            )
+            if replied is None:
+                logger.info(
+                    "[ELEGOO %s] command %s (id %s) not answered, confirmed by the printer status (%s)",
+                    self.serial_number,
+                    method,
+                    request_id,
+                    self._telemetry.job_state.value,
+                )
+                return CommandOutcome(COMMAND_ACCEPTED, method, message="confirmed by the printer status")
+            if not replied:
                 logger.warning("[ELEGOO %s] no reply to command %s (id %s)", self.serial_number, method, request_id)
                 return CommandOutcome(COMMAND_NO_REPLY, method, message="no reply from the printer")
             code = (pending.reply or {}).get("error_code")
@@ -450,7 +495,11 @@ class ElegooCC2Client:
     def resume_print(self) -> CommandOutcome:
         method = p.METHOD_RESUME_PRINT
         refusal = self._refuse_unless(Capability.JOB_PAUSE_RESUME, method, frozenset({JobState.PAUSED}))
-        return refusal or self._send_job_command(method)
+        return refusal or self._send_job_command(
+            method,
+            timeout=self.RESUME_TIMEOUT,
+            confirm_states=frozenset({JobState.RESUMING, JobState.PRINTING}),
+        )
 
     def stop_print(self) -> CommandOutcome:
         method = p.METHOD_STOP_PRINT
@@ -595,7 +644,16 @@ class ElegooCC2Client:
                 pending.event.set()
                 return
         if method in p.JOB_METHODS or method in p.CANVAS_METHODS:
-            return  # a late reply to a command we stopped waiting for
+            # A late reply to a command we stopped waiting for: logged, so a
+            # printer that answers slowly shows up, but it changes nothing.
+            logger.info(
+                "[ELEGOO %s] late reply to command %s (id %s): error_code %s",
+                self.serial_number,
+                method,
+                reply_id,
+                result.get("error_code"),
+            )
+            return
         error_code = result.get("error_code")
         if isinstance(error_code, int) and error_code != 0 and method in (p.METHOD_GET_STATUS, p.METHOD_GET_ATTRIBUTES):
             logger.warning(

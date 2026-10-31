@@ -178,6 +178,8 @@ def jobs(monkeypatch):
         start_heartbeat=False,
     )
     client.COMMAND_TIMEOUT = 0.05
+    client.RESUME_TIMEOUT = 0.05
+    client.CONFIRM_POLL_INTERVAL = 0.01
 
     def connect():
         client.connect()
@@ -266,6 +268,63 @@ class TestJobCommands:
             jobs.client.topics.api_response, {"id": request_id, "method": 1021, "result": {"error_code": 0}}
         )
         assert jobs.client.telemetry().job_state is JobState.PRINTING
+
+    def test_late_reply_is_logged(self, jobs, caplog):
+        fake = jobs.connect()
+        jobs.feed(PRINTING, progress=10)
+        jobs.client.pause_print()
+        request_id = [m for t, m in fake.published if m.get("method") == p.METHOD_PAUSE_PRINT][0]["id"]
+        with caplog.at_level(logging.INFO):
+            jobs.client.handle_message(
+                jobs.client.topics.api_response, {"id": request_id, "method": 1021, "result": {"error_code": 0}}
+            )
+        assert f"late reply to command 1021 (id {request_id}): error_code 0" in caplog.text
+
+
+RESUMING = (2, 2401)
+
+
+class TestResume:
+    """HW-M4-05 (31/10/2026): fw 02.01.01.04 resumes on 1023 but sends no reply within 10 s."""
+
+    def test_state_change_without_reply_is_accepted(self, jobs):
+        fake = jobs.connect()
+        jobs.feed(PAUSED, progress=40)
+        fake.answer = lambda request: jobs.feed(RESUMING, progress=40)
+        outcome = jobs.client.resume_print()
+        assert outcome.status == COMMAND_ACCEPTED
+        assert outcome.message == "confirmed by the printer status"
+        assert _sent(fake, p.METHOD_RESUME_PRINT) == [p.METHOD_RESUME_PRINT]
+
+    def test_back_to_printing_without_reply_is_accepted(self, jobs):
+        fake = jobs.connect()
+        jobs.feed(PAUSED, progress=40)
+        fake.answer = lambda request: jobs.feed(PRINTING, progress=41)
+        assert jobs.client.resume_print().status == COMMAND_ACCEPTED
+
+    def test_still_paused_without_reply_is_no_reply(self, jobs):
+        fake = jobs.connect()
+        jobs.feed(PAUSED, progress=40)
+        outcome = jobs.client.resume_print()
+        assert outcome.status == COMMAND_NO_REPLY
+        assert _sent(fake, p.METHOD_RESUME_PRINT) == [p.METHOD_RESUME_PRINT]
+
+    def test_printer_error_still_wins(self, jobs):
+        fake = jobs.connect()
+        jobs.feed(PAUSED, progress=40)
+        fake.answer = lambda request: {"error_code": 1010}
+        outcome = jobs.client.resume_print()
+        assert outcome.status == COMMAND_REJECTED
+        assert outcome.error_code == 1010
+
+    def test_waits_longer_than_other_commands(self):
+        assert ElegooCC2Client.RESUME_TIMEOUT > ElegooCC2Client.COMMAND_TIMEOUT
+
+    def test_pause_does_not_read_the_state_as_an_answer(self, jobs):
+        fake = jobs.connect()
+        jobs.feed(PRINTING, progress=10)
+        fake.answer = lambda request: jobs.feed(PAUSED, progress=10)
+        assert jobs.client.pause_print().status == COMMAND_NO_REPLY
 
 
 class TestStartPrint:
