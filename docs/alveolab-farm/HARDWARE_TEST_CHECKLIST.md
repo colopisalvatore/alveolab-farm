@@ -57,7 +57,7 @@ Legenda rischio: 🟢 sola lettura · 🟡 cambia stato non distruttivo · 🔴 
 
 | ID | Rischio | Test | Atteso | Esito |
 |---|---|---|---|---|
-| HW-M5-06 | 🟡 | `multicolor_slot_edit`: dalla card, slot 1 → Generic, PLA Matte, colore blu (metodo 2003) | `error_code 0`; touchscreen e `GET …/telemetry` mostrano PLA Matte blu; nessun movimento | |
+| HW-M5-06 | 🟡 | `multicolor_slot_edit`: dalla card, slot 1 → Generic, PLA Matte, colore blu (metodo 2003) | `error_code 0`; touchscreen e `GET …/telemetry` mostrano PLA Matte blu; nessun movimento | ✅ 31/10 (fw 02.01.01.04): dalla card slot 1 (`tray_id` 0) da Generic PLA Matte `FFFFFF` a `2850DF`; 2003 accettato (PUT 200), telemetria, card e touchscreen (visto da Salvo) blu, stampante ferma. Rimesso `FFFFFF` allo stesso modo, telemetria identica a prima. `multicolor_slot_edit` resta acceso nel `.env` del CT 100. |
 | HW-M5-07 | 🟢 | `multicolor_auto_refill`: interruttore acceso e spento (2004 `{auto_refill}`) | Il flag cambia anche sul touchscreen; `multicolor_auto_refill` segue | |
 | HW-M5-08 | 🔴 | `multicolor_load_unload`: carica dallo slot 1 (2001) con stampante ferma | Il filamento arriva all'ugello; risposta entro 5 min; `active_tray_id` = slot 1 | |
 | HW-M5-09 | 🔴 | Scarica lo slot caricato (2002) | Il filamento torna nel CANVAS; nessun errore sul touchscreen | |
