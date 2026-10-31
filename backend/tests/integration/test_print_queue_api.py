@@ -1438,6 +1438,46 @@ class TestQueueLibraryFileSupport:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
+    async def test_3mf_refused_for_a_centauri_2(
+        self, async_client: AsyncClient, printer_factory, library_file_factory, db_session
+    ):
+        """HW-M4-03: a 3MF jams the Centauri 2 over LAN, so it never reaches its queue."""
+        centauri = await printer_factory(provider="elegoo", model="Centauri 2")
+        threemf = await library_file_factory(
+            filename="Cilindro.gcode.3mf", file_metadata={"sliced_for_model": "Elegoo Centauri 2"}
+        )
+        gcode = await library_file_factory(
+            filename="cubo.gcode",
+            file_path="library/cubo.gcode",
+            file_type="gcode",
+            file_metadata={"sliced_for_model": "Elegoo Centauri 2"},
+        )
+
+        refused = await async_client.post(
+            "/api/v1/queue/", json={"printer_id": centauri.id, "library_file_id": threemf.id}
+        )
+        assert refused.status_code == 400
+        assert "Export G-code" in refused.json()["detail"]
+
+        accepted = await async_client.post(
+            "/api/v1/queue/", json={"printer_id": centauri.id, "library_file_id": gcode.id}
+        )
+        assert accepted.status_code == 200
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_3mf_still_queued_for_a_bambu_printer(
+        self, async_client: AsyncClient, printer_factory, library_file_factory, db_session
+    ):
+        printer = await printer_factory()
+        lib_file = await library_file_factory(filename="plate.gcode.3mf", file_path="library/plate.gcode.3mf")
+        response = await async_client.post(
+            "/api/v1/queue/", json={"printer_id": printer.id, "library_file_id": lib_file.id}
+        )
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_add_library_file_rejects_cross_model_mismatch(
         self, async_client: AsyncClient, printer_factory, library_file_factory, db_session
     ):

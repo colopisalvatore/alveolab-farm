@@ -724,6 +724,33 @@ class TestPrintersAPI:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
+    async def test_cover_of_a_non_bambu_printer_never_opens_ftp(
+        self, async_client: AsyncClient, printer_factory, db_session
+    ):
+        """The Centauri 2 has no FTP: asking for its cover must not try one (it refused 8 paths per call)."""
+        from unittest.mock import MagicMock, patch
+
+        from backend.app.services.bambu_mqtt import PrinterState
+
+        printer = await printer_factory(provider="elegoo", model="Centauri 2")
+        state = PrinterState()
+        state.connected = True
+        state.state = "RUNNING"
+        state.subtask_name = "cubo"
+
+        with (
+            patch("backend.app.api.routes.printers.printer_manager") as mock_pm,
+            patch("backend.app.api.routes.printers.download_file_try_paths_async") as ftp,
+        ):
+            mock_pm.get_status = MagicMock(return_value=state)
+            response = await async_client.get(f"/api/v1/printers/{printer.id}/cover")
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "No cover for this printer"
+        ftp.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_cover_uses_dispatched_plate_when_gcode_file_lacks_path(
         self, async_client: AsyncClient, printer_factory, db_session, tmp_path
     ):
