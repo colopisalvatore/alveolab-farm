@@ -854,9 +854,11 @@ async def add_to_queue(
         raise HTTPException(400, "Cannot specify both printer_id and target_model")
 
     # Validate printer exists (if assigned)
+    assigned_printer = None
     if data.printer_id is not None:
         result = await db.execute(select(Printer).where(Printer.id == data.printer_id))
-        if not result.scalar_one_or_none():
+        assigned_printer = result.scalar_one_or_none()
+        if not assigned_printer:
             raise HTTPException(400, "Printer not found")
 
     # Validate target_model has active printers. Skipped for cross-model items:
@@ -895,6 +897,15 @@ async def add_to_queue(
             validate_print_filename(library_file.filename)
         except InvalidFilenameError as e:
             raise HTTPException(400, str(e)) from e
+
+    # ALVEOLAB Farm: a 3MF jams the Centauri 2 over LAN (HW-M4-03). Refused
+    # here, before it waits in the queue; the dispatcher refuses it too.
+    if assigned_printer is not None and assigned_printer.provider == "elegoo":
+        from backend.app.services.printer_providers.elegoo.files import THREEMF_REFUSED_MESSAGE, refuses_3mf
+
+        queued_name = library_file.filename if library_file else (archive.filename if archive else None)
+        if refuses_3mf(queued_name):
+            raise HTTPException(400, f"{queued_name}: {THREEMF_REFUSED_MESSAGE}")
 
     # Cross-model safety gate (#2578): a G-code 3MF sliced for one model must
     # not be queued for dispatch to an incompatible model. The UI can no longer

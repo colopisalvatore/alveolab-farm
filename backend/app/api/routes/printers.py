@@ -1174,6 +1174,12 @@ async def get_printer_cover(
     if not printer:
         raise HTTPException(404, "Printer not found")
 
+    # ALVEOLAB Farm: the cover comes from the 3MF on a Bambu printer's FTP. A
+    # non-Bambu printer has no FTP (the Centauri 2 refuses the connection), so
+    # there is nothing to try.
+    if (printer.provider or "bambu") != "bambu":
+        raise HTTPException(404, "No cover for this printer")
+
     state = printer_manager.get_status(printer_id)
     if not state:
         raise HTTPException(404, "Printer not connected")

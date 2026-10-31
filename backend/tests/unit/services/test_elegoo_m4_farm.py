@@ -19,6 +19,7 @@ from backend.app.services import provider_jobs
 from backend.app.services.printer_providers.base import JobState
 from backend.app.services.printer_providers.elegoo.client import JobEvent
 from backend.app.services.printer_providers.elegoo.files import (
+    REASON_3MF_JAMS_CC2,
     REASON_NOT_SLICED,
     REASON_UNKNOWN_TARGET,
     REASON_UNSUPPORTED_TYPE,
@@ -89,13 +90,18 @@ class TestPrintableFiles:
         check = check_printable_on_cc2(path)
         assert check.reason == REASON_WRONG_PRINTER
 
-    def test_cc2_sliced_3mf_from_project_settings_or_gcode(self, tmp_path):
+    def test_cc2_sliced_3mf_is_refused_but_its_target_is_read(self, tmp_path):
+        """HW-M4-03: a 3MF sliced for the CC2 jams it over LAN; the library still learns who it is for."""
         a = _threemf(
             tmp_path, "a.gcode.3mf", project_settings={"printer_model": "Elegoo Centauri Carbon 2"}, plate_gcode="G28\n"
         )
         b = _threemf(tmp_path, "b.gcode.3mf", plate_gcode="G28\n" + ORCA_CC2_TAIL)
-        assert check_printable_on_cc2(a).ok
-        assert check_printable_on_cc2(b).ok
+        for path in (a, b):
+            check = check_printable_on_cc2(path)
+            assert not check.ok
+            assert check.reason == REASON_3MF_JAMS_CC2
+            assert check.sliced_for == "Elegoo Centauri Carbon 2"
+            assert "Export G-code" in check.message
 
     def test_unsliced_project_is_refused(self, tmp_path):
         path = _threemf(tmp_path, "project.3mf", project_settings={"printer_model": "Elegoo Centauri Carbon 2"})

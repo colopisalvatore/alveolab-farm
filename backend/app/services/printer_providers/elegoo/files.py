@@ -5,6 +5,12 @@ was sliced for a CC2. Anything else is refused, including a file that says
 nothing: a 3MF sliced by Bambu Studio carries G-code for a Bambu machine, and
 the name of a file proves nothing about who sliced it.
 
+Only plain G-code is printable. A sliced 3MF ("Export plate sliced file" in
+Orca), even one made for a CC2, is accepted by the printer over LAN and then
+jams it: firmware 02.01.01.04 stays "printing" with sub-status 0, refuses the
+stop (9999) and needs a power cycle (HW-M4-03, 31/10/2026). Its target printer
+is still read, so the library records who it was sliced for.
+
 Where the slicer writes the target printer:
   * plain G-code from OrcaSlicer / ElegooSlicer / Bambu Studio: comment lines
     ``; printer_model = ...`` and ``; printer_settings_id = ...`` in the
@@ -36,6 +42,17 @@ REASON_NOT_SLICED = "not_sliced"
 REASON_WRONG_PRINTER = "sliced_for_another_printer"
 REASON_UNKNOWN_TARGET = "target_printer_unknown"
 REASON_UNSUPPORTED_TYPE = "unsupported_file_type"
+REASON_3MF_JAMS_CC2 = "3mf_not_printable_on_cc2"
+
+THREEMF_REFUSED_MESSAGE = (
+    "a 3MF jams the Centauri 2 when sent over the network: "
+    "export plain G-code from the slicer (Export G-code) and send that"
+)
+
+
+def refuses_3mf(filename: str | None) -> bool:
+    """True for a file name the CC2 must not receive: any 3MF, sliced or not."""
+    return bool(filename) and filename.lower().endswith(".3mf")
 
 
 @dataclass(frozen=True)
@@ -112,7 +129,7 @@ def check_printable_on_cc2(path: Path | str) -> PrintableCheck:
     path = Path(path)
     name = path.name.lower()
     if not name.endswith(p.PRINTABLE_EXTENSIONS):
-        return PrintableCheck(False, reason=REASON_UNSUPPORTED_TYPE, message="only .gcode or sliced .3mf files")
+        return PrintableCheck(False, reason=REASON_UNSUPPORTED_TYPE, message="only .gcode files")
     try:
         if name.endswith(".3mf"):
             carries_gcode, settings = _threemf_settings(path)
@@ -140,6 +157,8 @@ def check_printable_on_cc2(path: Path | str) -> PrintableCheck:
             reason=REASON_WRONG_PRINTER,
             message=f"sliced for {target}, not for a Centauri 2",
         )
+    if name.endswith(".3mf"):
+        return PrintableCheck(False, sliced_for=target, reason=REASON_3MF_JAMS_CC2, message=THREEMF_REFUSED_MESSAGE)
     return PrintableCheck(True, sliced_for=target)
 
 
