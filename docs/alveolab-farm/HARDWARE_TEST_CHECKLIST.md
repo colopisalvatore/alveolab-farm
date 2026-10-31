@@ -35,7 +35,7 @@ Legenda rischio: 🟢 sola lettura · 🟡 cambia stato non distruttivo · 🔴 
 
 | ID | Rischio | Test | Atteso | Esito |
 |---|---|---|---|---|
-| HW-M4-01 | 🟡 | Upload file `.gcode` piccolo (profilo CC2) via `PUT /upload` | `error_code 0`; file visibile sul touchscreen; MD5 accettato | |
+| HW-M4-01 | 🟡 | Upload file `.gcode` piccolo (profilo CC2) via `PUT /upload` | `error_code 0`; file visibile sul touchscreen; MD5 accettato | ✅ 31/10 (`file_upload` acceso): la farm non ha un endpoint di solo upload (lo fa il dispatcher della coda, che poi avvia), quindi `upload_file()` chiamata dentro il container sul G-code CC2 `EC2_0.4_DIABLO_KAWASAKI…` (30,2 MB, `check_printable_on_cc2` → Elegoo Centauri 2) salvato come `ALVEOLAB_HW-M4-01_KAWASAKI.gcode`: 29 blocchi da 1 MiB tutti `error_code 0`, MD5 accettato, 23,4 s. Stampante sempre idle. File nella lista del touchscreen (visto da Salvo). |
 | HW-M4-02 | 🟡 | Upload senza `X-Token` su firmware stock | Annotare se accettato | |
 | HW-M4-03 | 🟡 | Upload 3MF slicato da ElegooSlicer/Orca (profilo CC2) | Annotare se stampabile | |
 | HW-M4-04 | 🔴 | Avvio stampa test (1020) da farm, `slot_map` vuoto | Avvio unico; nessun doppio avvio dopo riconnessione forzata | |
