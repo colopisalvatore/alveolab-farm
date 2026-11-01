@@ -3392,7 +3392,7 @@ class PrintScheduler:
         finding.
         """
         if _is_provider_printer(printer_id):
-            return None  # ALVEOLAB Farm: no Bambu AMS; the file carries its CANVAS mapping
+            return None  # ALVEOLAB Farm: no Bambu AMS; the CANVAS slot_map is built at dispatch (elegoo/slots.py)
         stored_mapping: list | None = None
         if item.ams_mapping:
             try:
@@ -8502,6 +8502,7 @@ class PrintScheduler:
             STARTABLE_STATES,
         )
         from backend.app.services.printer_providers.elegoo.files import check_printable_on_cc2, printer_filename
+        from backend.app.services.printer_providers.elegoo.slots import file_filaments, plan_slot_map
         from backend.app.services.printer_providers.elegoo.upload import upload_file
 
         self._provider_job_names[item.id] = Path(filename or file_path.name).stem
@@ -8528,6 +8529,21 @@ class PrintScheduler:
         except ValueError as exc:
             await self._fail_provider_item(db, item, printer, f"File refused: {exc}", "incompatible_file")
             return
+
+        # Which CANVAS slot feeds each tool. Without it the CC2 reuses the last
+        # mapping it was given, not the colour in the file (1/11/2026).
+        telemetry = client.telemetry() if callable(getattr(client, "telemetry", None)) else None
+        slots = list(getattr(telemetry, "multicolor_slots", None) or [])
+        filaments = await asyncio.to_thread(file_filaments, file_path)
+        slot_plan = plan_slot_map(filaments, slots)
+        if slot_plan.problem:
+            await self._fail_provider_item(
+                db, item, printer, f"Filament not loaded: {slot_plan.problem}", "filament_not_loaded"
+            )
+            return
+        logger.info(
+            "Queue item %s: CANVAS mapping %s", item.id, "; ".join(slot_plan.picks) or "none (no CANVAS reported)"
+        )
 
         upload = await upload_file(printer.ip_address, file_path, remote_name, printer.access_code or None)
         if not upload.success:
@@ -8574,6 +8590,7 @@ class PrintScheduler:
             remote_name,
             job_key=billing_run_id,
             auto_bed_leveling=item.bed_levelling == "on",
+            slot_map=slot_plan.slot_map,
         )
         if outcome.status in (COMMAND_ACCEPTED, COMMAND_NO_REPLY):
             # The command left the farm: the budget is spent and the printer is

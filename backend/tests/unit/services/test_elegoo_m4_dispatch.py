@@ -24,6 +24,7 @@ from backend.app.services.printer_providers.elegoo.client import (
 from backend.app.services.printer_providers.elegoo.upload import UploadResult
 
 CC2_GCODE = "G28\nG1 X1\n; printer_model = Elegoo Centauri Carbon 2\n"
+WHITE_GCODE = "M6211 A1 L200 T0\n" + CC2_GCODE + "; filament_colour = #FFFFFF\n; filament_type = PLA\n"
 
 
 class FakeCC2:
@@ -93,10 +94,45 @@ class TestProviderDispatch:
         assert item.billing_run_id
         assert [u[2] for u in farm.uploads] == ["benchy.gcode"]
         assert farm.state.client.starts == [
-            ("benchy.gcode", {"job_key": item.billing_run_id, "auto_bed_leveling": False})
+            ("benchy.gcode", {"job_key": item.billing_run_id, "auto_bed_leveling": False, "slot_map": []})
         ]
         assert provider_jobs._dispatched[printer.id].printer_filename == "benchy.gcode"
         assert farm.sched._printer_in_dispatch_hold(printer.id) is True
+
+    async def test_start_names_the_canvas_slot_of_the_file_colour(self, farm):
+        """1/11/2026: a white T0 file started on the black slot 4 the cubo had used."""
+        from backend.app.services.printer_providers.base import JobState, MultiColorSlot
+
+        canvas = [
+            MultiColorSlot(0, 0, True, "PLA", "FFFFFF"),
+            MultiColorSlot(0, 3, True, "PLA", "000000", active=True),
+        ]
+
+        class CanvasCC2(FakeCC2):
+            def telemetry(self):
+                return SimpleNamespace(job_state=JobState.IDLE, multicolor_slots=canvas)
+
+        farm.state.client = CanvasCC2(CommandOutcome(COMMAND_ACCEPTED, 1020, 0))
+        printer, item, path = await farm.make_item(WHITE_GCODE)
+        item = await farm.dispatch(printer, item, path)
+        assert item.status == "printing"
+        assert farm.state.client.starts[0][1]["slot_map"] == [{"t": 0, "canvas_id": 0, "tray_id": 0}]
+
+    async def test_colour_not_in_the_canvas_is_refused_before_the_upload(self, farm):
+        from backend.app.services.printer_providers.base import JobState, MultiColorSlot
+
+        class BlackOnlyCC2(FakeCC2):
+            def telemetry(self):
+                return SimpleNamespace(
+                    job_state=JobState.IDLE, multicolor_slots=[MultiColorSlot(0, 3, True, "PLA", "000000")]
+                )
+
+        farm.state.client = BlackOnlyCC2(CommandOutcome(COMMAND_ACCEPTED, 1020, 0))
+        printer, item, path = await farm.make_item(WHITE_GCODE)
+        item = await farm.dispatch(printer, item, path)
+        assert item.status == "failed"
+        assert item.error_message.startswith("Filament not loaded: no CANVAS slot holds PLA #FFFFFF for T0")
+        assert farm.uploads == [] and farm.state.client.starts == []
 
     async def test_bambu_file_never_leaves_the_farm(self, farm):
         printer, item, path = await farm.make_item("; printer_model = Bambu Lab P1S\nG28\n", "p1s.gcode")
