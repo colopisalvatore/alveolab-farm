@@ -262,6 +262,7 @@ async def test_engine():
         print_log,
         print_queue,
         printer,
+        production,
         project,
         project_bom,
         scheduled_drying,

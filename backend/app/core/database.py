@@ -322,6 +322,7 @@ async def init_db():
         printer,
         printer_ha_sensor,
         printer_sensor_history,
+        production,
         project,
         project_bom,
         scheduled_drying,
