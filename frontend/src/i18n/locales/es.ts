@@ -1344,6 +1344,7 @@ export default {
       rowTooltip: 'Este archivo conserva las ranuras AMS exactas que eligió el slicer, guardadas para la impresora de este elemento. Una reimpresión en ella puede reutilizar esas bobinas en lugar de volver a emparejar por tipo y color.',
     },
     title: 'Cola de impresión',
+    farm: { addJob: 'Añadir trabajo' },
     subtitle: 'Programe y gestione sus trabajos de impresión',
     // Print modal
     editQueueItem: 'Editar elemento de la cola',

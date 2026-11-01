@@ -1344,6 +1344,7 @@ export default {
       rowTooltip: '此存档保留了切片软件选择的确切 AMS 槽位，并为该项目的目标打印机保存。在该打印机上重新打印时，可复用这些料盘，而不必再按类型和颜色重新匹配。',
     },
     title: '打印队列',
+    farm: { addJob: '添加任务' },
     subtitle: '排程和管理您的打印任务',
     // Print modal
     editQueueItem: '编辑队列项目',

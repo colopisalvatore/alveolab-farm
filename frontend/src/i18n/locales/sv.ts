@@ -1341,6 +1341,7 @@ export default {
   // Queue page
   queue: {
     title: 'Utskriftskö',
+    farm: { addJob: 'Lägg till jobb' },
     subtitle: 'Schemalägg och hantera dina utskriftsjobb',
     filamentShort: {
       rowBadge: 'Otillräckligt filament för den tilldelade rullen',

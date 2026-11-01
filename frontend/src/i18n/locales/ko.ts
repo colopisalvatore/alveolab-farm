@@ -1283,6 +1283,7 @@ export default {
 
   queue: {
     title: '인쇄 대기열',
+    farm: { addJob: '작업 추가' },
     subtitle: '인쇄 작업을 예약하고 관리하세요',
     editQueueItem: '대기열 항목 편집',
     selectAllPlates: '{{count}}개 플레이트 전체 선택',

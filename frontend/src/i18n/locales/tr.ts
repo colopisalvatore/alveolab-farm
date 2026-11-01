@@ -1331,6 +1331,7 @@ export default {
 
   queue: {
     title: 'Baskı Kuyruğu',
+    farm: { addJob: 'İş ekle' },
     subtitle: 'Baskı işlerinizi zamanlayın ve yönetin',
     filamentShort: {
       rowBadge: 'Atanan makara için yetersiz filament',

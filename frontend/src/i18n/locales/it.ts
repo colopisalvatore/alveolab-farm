@@ -1344,6 +1344,7 @@ export default {
       rowTooltip: 'Questo archivio conserva gli slot AMS esatti scelti dallo slicer, salvati per la stampante di questo elemento. Una ristampa su di essa può riutilizzare quelle bobine invece di rifare l\'abbinamento per tipo e colore.',
     },
     title: 'Coda di stampa',
+    farm: { addJob: 'Aggiungi job' },
     subtitle: 'Programma e gestisci i tuoi lavori di stampa',
     // Print modal
     editQueueItem: 'Modifica elemento coda',

@@ -1340,6 +1340,7 @@ export default {
   // Queue page
   queue: {
     title: "Черга друку",
+    farm: { addJob: 'Додати завдання' },
     subtitle: "Плануйте завдання друку та керуйте ними",
     filamentShort: {
       rowBadge: "Недостатньо філаменту для призначеної котушки",

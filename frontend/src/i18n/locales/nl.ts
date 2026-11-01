@@ -1341,6 +1341,7 @@ export default {
   // Queue page
   queue: {
     title: 'Afdrukwachtrij',
+    farm: { addJob: 'Job toevoegen' },
     subtitle: 'Plan en beheer je afdruktaken',
     filamentShort: {
       rowBadge: 'Onvoldoende filament op de toegewezen spoel',

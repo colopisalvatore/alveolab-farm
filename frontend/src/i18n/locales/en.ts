@@ -1341,6 +1341,7 @@ export default {
   // Queue page
   queue: {
     title: 'Print Queue',
+    farm: { addJob: 'Add job' },
     subtitle: 'Schedule and manage your print jobs',
     filamentShort: {
       rowBadge: 'Insufficient filament for the assigned spool',
