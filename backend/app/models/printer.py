@@ -49,6 +49,12 @@ class Printer(Base):
     # Queue: True after a print finishes/fails, until user acknowledges the plate is cleared.
     # Persisted so the gate survives crashes and power cycles (issue #961).
     awaiting_plate_clear: Mapped[bool] = mapped_column(Boolean, default=False)
+    # ALVEOLAB Farm: the build plate mounted now, named as the slicer names it
+    # ("Textured PEI Plate", "Cool Plate"...). Set by hand when the plate is
+    # changed or flipped; a G-code sliced for another plate is refused, since
+    # the bed temperature comes with it (1/11/2026: PLA at 35 C on textured PEI
+    # came off the bed). None = not known, nothing is checked.
+    bed_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

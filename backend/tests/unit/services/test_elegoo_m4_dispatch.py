@@ -236,3 +236,32 @@ async def test_start_waits_for_the_printer_to_finish_storing_the_upload(farm):
     item = await farm.dispatch(printer, item, path)
     assert seen == [JobState.BUSY, JobState.BUSY, JobState.IDLE]
     assert len(farm.state.client.starts) == 1
+
+
+COOL_PLATE_GCODE = CC2_GCODE + "; curr_bed_type = Cool Plate\n"
+
+
+@pytest.mark.asyncio
+class TestPlateMounted:
+    """1/11/2026: a file sliced for the Cool Plate (35 C) started on textured PEI and came off."""
+
+    async def test_file_for_another_plate_is_refused_before_the_upload(self, farm, db_session):
+        printer, item, path = await farm.make_item(COOL_PLATE_GCODE)
+        printer.bed_type = "Textured PEI Plate"
+        await db_session.commit()
+        item = await farm.dispatch(printer, item, path)
+        assert item.status == "failed"
+        assert "sliced for the Cool Plate but the printer has the Textured PEI Plate mounted" in item.error_message
+        assert farm.uploads == [] and farm.state.client.starts == []
+
+    async def test_file_for_the_mounted_plate_starts(self, farm, db_session):
+        printer, item, path = await farm.make_item(COOL_PLATE_GCODE)
+        printer.bed_type = "Cool Plate"
+        await db_session.commit()
+        item = await farm.dispatch(printer, item, path)
+        assert item.status == "printing"
+
+    async def test_unknown_plate_checks_nothing(self, farm):
+        printer, item, path = await farm.make_item(COOL_PLATE_GCODE)
+        item = await farm.dispatch(printer, item, path)
+        assert item.status == "printing"

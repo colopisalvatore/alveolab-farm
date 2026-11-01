@@ -1,5 +1,6 @@
 """API routes for print queue management."""
 
+import asyncio
 import json
 import logging
 import zipfile
@@ -906,6 +907,18 @@ async def add_to_queue(
         queued_name = library_file.filename if library_file else (archive.filename if archive else None)
         if refuses_3mf(queued_name):
             raise HTTPException(400, f"{queued_name}: {THREEMF_REFUSED_MESSAGE}")
+        # Sliced for another build plate than the one mounted: refused now, with
+        # the reason, rather than failed at start (the dispatcher checks again).
+        if library_file is not None and assigned_printer.bed_type:
+            from backend.app.services.printer_providers.elegoo.files import bed_type_mismatch, check_printable_on_cc2
+
+            lib_path = Path(library_file.file_path)
+            src_path = lib_path if lib_path.is_absolute() else settings.base_dir / library_file.file_path
+            if src_path.exists():
+                check = await asyncio.to_thread(check_printable_on_cc2, src_path)
+                wrong_plate = bed_type_mismatch(check.bed_type, assigned_printer.bed_type)
+                if wrong_plate:
+                    raise HTTPException(400, f"{queued_name}: {wrong_plate}")
 
     # Cross-model safety gate (#2578): a G-code 3MF sliced for one model must
     # not be queued for dispatch to an incompatible model. The UI can no longer

@@ -373,7 +373,9 @@ def _unique_external_name(ext_dir: Path, filename: str) -> str:
     return candidate
 
 
-def _resolve_slice_destination(target_folder: LibraryFolder | None, out_filename: str) -> tuple[Path, bool, str | None]:
+def _resolve_slice_destination(
+    target_folder: LibraryFolder | None, out_filename: str, managed_suffix: str = ".gcode.3mf"
+) -> tuple[Path, bool, str | None]:
     """Resolve where a slice result should be written.
 
     Returns ``(path, is_external, fallback_reason)``. ``fallback_reason`` is
@@ -393,20 +395,24 @@ def _resolve_slice_destination(target_folder: LibraryFolder | None, out_filename
     Unlike uploads, a failure here does not raise. The bytes exist and cost
     real time to produce, so an unwritable target falls back to managed storage
     with a reason attached rather than discarding the slice.
+
+    ``managed_suffix`` is the extension of a file in managed storage: the
+    readers (dispatch, the CC2 file check) go by the name on disk, so a plain
+    G-code must not be stored under a ``.gcode.3mf`` name.
     """
     if target_folder is None or not target_folder.is_external:
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, None
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, None
 
     if target_folder.external_readonly:
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_readonly"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_readonly"
     if not target_folder.external_path:
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_no_path"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_no_path"
 
     ext_dir = Path(target_folder.external_path)
     if not ext_dir.exists() or not ext_dir.is_dir():
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_unreachable"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_unreachable"
     if not os.access(ext_dir, os.W_OK):
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_not_writable"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_not_writable"
 
     try:
         dest = safe_join_under(ext_dir, _unique_external_name(ext_dir, out_filename), http=False)
@@ -414,7 +420,7 @@ def _resolve_slice_destination(target_folder: LibraryFolder | None, out_filename
         # The source filename reached us from a 3MF on disk, so this is
         # defensive rather than expected -- but a name that escapes the mount
         # must land in managed storage, never outside it.
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_invalid_name"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_invalid_name"
     return dest, True, None
 
 
@@ -4797,6 +4803,88 @@ async def guard_nozzle_class_reslice(
     return None
 
 
+async def _persist_cc2_gcode(
+    db: AsyncSession,
+    *,
+    cc2,
+    base_name: str,
+    target_folder: LibraryFolder | None,
+    folder_id: int | None,
+    result,
+    used_embedded_settings: bool,
+    extra_metadata: dict | None,
+    current_user_id: int | None,
+) -> SliceResponse:
+    """Save the plain G-code of a slice made for a Centauri 2 as a ``.gcode`` library file.
+
+    Same row as ``slice_and_persist`` writes for a 3MF, with what the queue's
+    CC2 gates read: ``sliced_for_model`` and the plate (``bed_type``).
+    """
+    out_filename = f"{base_name}.gcode"
+    out_path, out_is_external, external_fallback = _resolve_slice_destination(
+        target_folder, out_filename, managed_suffix=".gcode"
+    )
+    if out_is_external:
+        out_filename = out_path.name
+    if external_fallback:
+        logger.warning(
+            "Slice output %s stored in managed library instead of external folder %s: %s",
+            out_filename,
+            target_folder.external_path if target_folder else None,
+            external_fallback,
+        )
+    await asyncio.to_thread(out_path.write_bytes, cc2.gcode)
+
+    thumbnail_relative: str | None = None
+    if cc2.thumbnail:
+        thumb_path = get_library_thumbnails_dir() / f"{uuid.uuid4().hex}.png"
+        await asyncio.to_thread(thumb_path.write_bytes, cc2.thumbnail)
+        thumbnail_relative = to_relative_path(thumb_path)
+
+    # Some sidecar builds leave the X-Filament-Used-* headers unset: the
+    # G-code's own totals are the fallback, as ThreeMFParser is for a 3MF.
+    metadata: dict = {
+        "print_time_seconds": result.print_time_seconds,
+        "filament_used_g": result.filament_used_g or cc2.filament_used_g or 0.0,
+        "filament_used_mm": result.filament_used_mm or cc2.filament_used_mm or 0.0,
+        "sliced_for_model": cc2.sliced_for,
+    }
+    for key, value in (("bed_type", cc2.bed_type), ("layer_height", cc2.layer_height)):
+        if value:
+            metadata[key] = value
+    if used_embedded_settings:
+        metadata["used_embedded_settings"] = True
+    if external_fallback:
+        metadata["external_write_fallback"] = external_fallback
+    if extra_metadata:
+        metadata.update(extra_metadata)
+
+    new_file = LibraryFile(
+        folder_id=folder_id,
+        is_external=out_is_external,
+        filename=out_filename,
+        file_path=_stored_file_path(out_path, out_is_external),
+        file_type="gcode",
+        file_size=len(cc2.gcode),
+        file_hash=hashlib.sha256(cc2.gcode).hexdigest(),
+        thumbnail_path=thumbnail_relative,
+        file_metadata=metadata,
+        source_type="sliced",
+        created_by_id=current_user_id,
+    )
+    db.add(new_file)
+    await db.commit()
+    return SliceResponse(
+        library_file_id=new_file.id,
+        name=new_file.filename,
+        print_time_seconds=result.print_time_seconds,
+        filament_used_g=metadata["filament_used_g"],
+        filament_used_mm=metadata["filament_used_mm"],
+        used_embedded_settings=used_embedded_settings,
+        external_write_fallback=external_fallback,
+    )
+
+
 async def slice_and_persist(
     db: AsyncSession,
     *,
@@ -4862,6 +4950,29 @@ async def slice_and_persist(
     # a large plate renders for seconds, and on the event loop that stalled
     # every request and printer connection for as long (#3135).
     result = result._replace(content=await asyncio.to_thread(inject_plate_thumbnails_if_missing, result.content))
+
+    # ALVEOLAB Farm: a Centauri 2 takes plain G-code only (a 3MF jams it over
+    # LAN), and the slicer CLI path always hands back a 3MF. When the result was
+    # sliced for a CC2, keep just the plate's G-code, with the plate picture.
+    from backend.app.services.printer_providers.elegoo.files import TooManyPlatesForCC2, cc2_gcode_from_sliced_3mf
+
+    try:
+        cc2 = await asyncio.to_thread(cc2_gcode_from_sliced_3mf, result.content)
+    except TooManyPlatesForCC2 as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if cc2 is not None:
+        return await _persist_cc2_gcode(
+            db,
+            cc2=cc2,
+            base_name=safe_base,
+            target_folder=target_folder,
+            folder_id=folder_id,
+            result=result,
+            used_embedded_settings=used_embedded_settings,
+            extra_metadata=extra_metadata,
+            current_user_id=current_user_id,
+        )
+
     out_path.write_bytes(result.content)
 
     # Extract thumbnail from the produced 3MF so the library card shows a
@@ -5193,6 +5304,15 @@ async def slice_library_file(
         )
     if not (src_lower.endswith(".stl") or src_lower.endswith(".3mf")):
         raise HTTPException(status_code=400, detail="Source file must be STL or 3MF")
+
+    # ALVEOLAB Farm: slicing for a named printer takes the plate mounted on it
+    # unless the caller picked one.
+    if request.printer_id is not None:
+        target = (await db.execute(select(Printer).where(Printer.id == request.printer_id))).scalar_one_or_none()
+        if target is None:
+            raise HTTPException(status_code=400, detail="Printer not found")
+        if not request.bed_type and target.bed_type:
+            request = request.model_copy(update={"bed_type": target.bed_type})
 
     src_path = Path(app_settings.base_dir) / lib_file.file_path
     if not src_path.exists():

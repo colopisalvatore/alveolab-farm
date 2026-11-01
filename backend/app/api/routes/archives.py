@@ -4853,6 +4853,15 @@ async def slice_archive(
     if not src_path.exists():
         raise HTTPException(status_code=404, detail="Archive source file missing on disk")
 
+    # ALVEOLAB Farm: same as the library slice route, a slice for a named
+    # printer takes the plate mounted on it unless the caller picked one.
+    if request.printer_id is not None:
+        target = (await db.execute(select(Printer).where(Printer.id == request.printer_id))).scalar_one_or_none()
+        if target is None:
+            raise HTTPException(status_code=400, detail="Printer not found")
+        if not request.bed_type and target.bed_type:
+            request = request.model_copy(update={"bed_type": target.bed_type})
+
     raw_filename = archive.filename or src_path.name
     src_lower = raw_filename.lower()
     if not (
