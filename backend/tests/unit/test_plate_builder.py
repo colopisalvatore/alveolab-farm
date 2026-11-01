@@ -183,3 +183,145 @@ def test_gap_override_and_tall_pieces_get_room_for_the_brim():
 def test_not_a_project_file():
     with pytest.raises(PlateBuildError, match="not a 3MF"):
         build_plate([PlateSource(b"plain text", 1)])
+
+
+# ---- review fixes
+
+
+def test_a_wide_piece_beside_the_exclusion_zone_goes_above_it_instead_of_looping():
+    from backend.app.services.plate_builder import Footprint, pack
+
+    wide = Footprint(0, "1", "wide", [1, 0, 0, 0, 1, 0, 0, 0, 1], 240, 20, 5, 0, 0, 0, gap=4)
+    spots = pack([wide], (0, 0, 256, 256), [(0, 0, 18, 28)])
+    assert spots == [(EDGE_MM, 28 + EDGE_MM)]
+    # Too deep to fit even above the zone: a clean "no", not a hang.
+    assert (
+        pack([Footprint(0, "1", "big", [1] * 9, 240, 240, 5, 0, 0, 0, gap=4)], (0, 0, 256, 256), [(0, 0, 18, 28)])
+        is None
+    )
+
+
+def test_modifiers_and_negative_volumes_do_not_lift_or_move_the_piece():
+    src = make_project_3mf(
+        [
+            {
+                "id": 2,
+                "name": "Base.stl",
+                "size": (20, 20, 10),
+                "items": [rz_transform(0, 100, 100)],
+                # A negative volume reaching 3 mm below the part, and a wide modifier.
+                "volumes": [((10, 10, 6), "negative_part", (0, 0, -3)), ((80, 80, 4), "modifier_part", (0, 0, 2))],
+            }
+        ],
+        [[(2, 0)]],
+    )
+    result = build_plate([PlateSource(src, 1)], sets=1)
+    model = _read(result.content)["3D/3dmodel.model"].decode()
+    tr = [float(v) for v in re.search(r'<item [^>]*transform="([^"]*)"', model).group(1).split()]
+    assert tr[11] == pytest.approx(0.0, abs=1e-6)  # the printed part sits on the bed
+    # Footprint from the 20x20 part, not the 80x80 modifier: many fit.
+    assert result.max_sets > 50
+
+
+def test_a_sunk_object_stays_sunk():
+    src = make_project_3mf(
+        [{"id": 2, "name": "Sunk.stl", "size": (20, 20, 10), "items": [rz_transform(0, 100, 100, -2)]}], [[(2, 0)]]
+    )
+    result = build_plate([PlateSource(src, 1)], sets=1)
+    model = _read(result.content)["3D/3dmodel.model"].decode()
+    tr = [float(v) for v in re.search(r'<item [^>]*transform="([^"]*)"', model).group(1).split()]
+    assert tr[11] == pytest.approx(-2.0)
+
+
+def test_a_floating_object_is_put_down():
+    src = make_project_3mf(
+        [{"id": 2, "name": "Up.stl", "size": (20, 20, 10), "items": [rz_transform(0, 100, 100, 7)]}], [[(2, 0)]]
+    )
+    (box,) = _boxes(build_plate([PlateSource(src, 1)], sets=1).content)
+    assert box[4] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_a_filament_the_target_settings_do_not_have_is_a_clear_error():
+    one_filament = snowman_like(bed=180, exclude=False, filaments=1)
+    with pytest.raises(PlateBuildError, match="use filament 3 but the settings have 1"):
+        build_plate([PlateSource(snowman_like(), 2)], sets=1, settings_from=one_filament)
+    with pytest.raises(PlateBuildError, match="use filament 3 but the settings have 1"):
+        build_plate([PlateSource(snowman_like(), 2)], sets=1, settings_from=one_filament, filament_colour="#00FF00")
+    ok = build_plate([PlateSource(snowman_like(), 2)], sets=1, settings_from=one_filament, extruder=1)
+    assert ok.extruders == [1]
+
+
+def test_too_many_pieces_in_one_set(monkeypatch):
+    from backend.app.services import plate_builder
+
+    monkeypatch.setattr(plate_builder, "MAX_ITEMS", 3)
+    with pytest.raises(PlateBuildError, match="One set has 4 pieces"):
+        build_plate([PlateSource(snowman_like(), 2, copies=2)], sets=1)
+    monkeypatch.setattr(plate_builder, "MAX_ITEMS", 4)
+    with pytest.raises(PlateBuildError, match="more than 4 pieces on one plate: at most 2"):
+        build_plate([PlateSource(snowman_like(), 2)], sets=3)
+
+
+def test_unpacked_size_is_capped(monkeypatch):
+    from backend.app.services import plate_builder
+
+    monkeypatch.setattr(plate_builder, "MAX_SOURCE_BYTES", 1000)
+    with pytest.raises(PlateBuildError, match="once unpacked"):
+        build_plate([PlateSource(snowman_like(), 1)])
+    monkeypatch.setattr(plate_builder, "MAX_SOURCE_BYTES", 10**9)
+    monkeypatch.setattr(plate_builder, "MAX_TOTAL_BYTES", 1000)
+    with pytest.raises(PlateBuildError, match="sources are"):
+        build_plate([PlateSource(snowman_like(), 1)])
+
+
+def test_brim_gap_follows_the_settings_that_will_be_sliced():
+    with_brim = build_plate([PlateSource(snowman_like(), 1)])
+    no_brim_settings = snowman_like(brim="no_brim")
+    without = build_plate([PlateSource(snowman_like(), 1)], settings_from=no_brim_settings)
+    assert without.sets > with_brim.sets
+
+
+def test_merged_mesh_files_in_subfolders_keep_their_path():
+    other = make_project_3mf(
+        [{"id": 2, "name": "Scarf.stl", "size": (25, 10, 3), "items": [rz_transform(0, 60, 60)]}],
+        [[(2, 0)]],
+        folder="sub/",
+    )
+    result = build_plate([PlateSource(snowman_like(), 2), PlateSource(other, 1)], sets=1, extruder=1)
+    files = _read(result.content)
+    paths = re.findall(r'p:path="/([^"]+)"', files["3D/3dmodel.model"].decode())
+    assert any(p.startswith("3D/Objects/s1_sub/") for p in paths)
+    assert all(p in files for p in paths)
+
+
+def test_relationships_are_filtered_whatever_the_attribute_order():
+    src = make_project_3mf(
+        [
+            {"id": 2, "name": "Keep.stl", "size": (10, 10, 2), "items": [rz_transform(0, 50, 50)]},
+            {
+                "id": 4,
+                "name": "Drop.stl",
+                "size": (10, 10, 2),
+                "items": [rz_transform(0, 80, 50)],
+                "volumes": [((5, 5, 1), "modifier_part", (0, 0, 0))],
+            },
+        ],
+        [[(2, 0)], [(4, 0)]],
+    )
+    files = _read(build_plate([PlateSource(src, 1)], sets=1).content)
+    rels = files["3D/_rels/3dmodel.model.rels"].decode()
+    assert "object_4" not in rels  # its Id-first relationship went too
+    assert not any(n.startswith("3D/Objects/object_4") for n in files)
+
+
+def test_dropped_thumbnails_leave_no_dangling_references():
+    files = _read(build_plate([PlateSource(snowman_like(), 1)], sets=1).content)
+    assert "plate_1.png" not in files["_rels/.rels"].decode()
+    assert "Thumbnail_Middle" not in files["3D/3dmodel.model"].decode()
+    assert "3D/3dmodel.model" in files["_rels/.rels"].decode()
+
+
+def test_plate_name_is_added_when_the_source_plate_has_none():
+    src = snowman_like(plate_names=False)
+    (plate,) = _plates(build_plate([PlateSource(src, 1)], sets=1, plate_name="Bianco x4").content)
+    assert 'key="plater_name" value="Bianco x4"' in plate

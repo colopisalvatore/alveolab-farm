@@ -16,6 +16,7 @@ NS = (
     'xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" '
     'xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p"'
 )
+MODEL_REL = "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"
 
 
 def box_mesh_model(object_id: int, sx: float, sy: float, sz: float) -> str:
@@ -62,19 +63,40 @@ def make_project_3mf(
     filaments: int = 4,
     printer: str = "Bambu Lab P1S 0.4 nozzle",
     tag: str = "",
+    folder: str = "",
+    plate_names: bool = True,
 ) -> bytes:
-    """parts: [{id, name, size: (x, y, z), extruder, items: [transform, ...]}];
-    plates: per plate, the (object id, instance index) pairs on it."""
+    """parts: [{id, name, size: (x, y, z), extruder, items: [transform, ...],
+    volumes: [(size, subtype, (dx, dy, dz)), ...]}]. ``volumes`` are extra
+    components of the object (modifier, negative part...), each a box in its own
+    mesh file. plates: per plate, the (object id, instance index) pairs on it."""
     resources, items, settings_objects, rels, files = [], [], [], [], {}
     n = 0
     for part in parts:
         oid, mesh_id = part["id"], part["id"] - 1
-        path = f"3D/Objects/object_{oid}{tag}.model"
+        ext = part.get("extruder", 1)
+        path = f"3D/Objects/{folder}object_{oid}{tag}.model"
         files[path] = box_mesh_model(mesh_id, *part["size"])
+        components = [
+            f'<component p:path="/{path}" objectid="{mesh_id}" p:UUID="0001{oid:04x}-b206-40ff-9872-83e8017abed1" '
+            'transform="1 0 0 0 1 0 0 0 1 0 0 0"/>'
+        ]
+        rels.append(f' <Relationship Target="/{path}" Id="rel-{oid}" Type="{MODEL_REL}"/>')
+        volume_parts = ""
+        for k, (size, subtype, (dx, dy, dz)) in enumerate(part.get("volumes", []), start=1):
+            vid = 1000 * oid + k
+            vpath = f"3D/Objects/{folder}object_{oid}_{k}{tag}.model"
+            files[vpath] = box_mesh_model(vid, *size)
+            components.append(
+                f'<component p:path="/{vpath}" objectid="{vid}" transform="1 0 0 0 1 0 0 0 1 {dx} {dy} {dz}"/>'
+            )
+            # Attribute order differs from the line above on purpose: Id first.
+            rels.append(f' <Relationship Id="rel-{vid}" Target="/{vpath}" Type="{MODEL_REL}"/>')
+            volume_parts += f'    <part id="{vid}" subtype="{subtype}">\n    </part>\n'
         resources.append(
             f'<object id="{oid}" p:UUID="0000{oid:04x}-61cb-4c03-9d28-80fed5dfa1dc" type="model"><components>'
-            f'<component p:path="/{path}" objectid="{mesh_id}" p:UUID="0001{oid:04x}-b206-40ff-9872-83e8017abed1" '
-            'transform="1 0 0 0 1 0 0 0 1 0 0 0"/></components></object>'
+            + "".join(components)
+            + "</components></object>"
         )
         for tr in part["items"]:
             n += 1
@@ -83,13 +105,9 @@ def make_project_3mf(
             )
         settings_objects.append(
             f'  <object id="{oid}">\n    <metadata key="name" value="{part["name"]}"/>\n'
-            f'    <metadata key="extruder" value="{part.get("extruder", 1)}"/>\n'
+            f'    <metadata key="extruder" value="{ext}"/>\n'
             f'    <part id="{mesh_id}" subtype="normal_part">\n      <metadata key="name" value="{part["name"]}"/>\n'
-            f'      <metadata key="extruder" value="{part.get("extruder", 1)}"/>\n    </part>\n  </object>\n'
-        )
-        rels.append(
-            f' <Relationship Target="/{path}" Id="rel-{oid}" '
-            'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
+            f'      <metadata key="extruder" value="{ext}"/>\n    </part>\n' + volume_parts + "  </object>\n"
         )
     plate_xml = []
     for pi, inst in enumerate(plates, start=1):
@@ -101,14 +119,17 @@ def make_project_3mf(
             "    </model_instance>\n"
             for k, (o, i) in enumerate(inst)
         )
+        name = f'    <metadata key="plater_name" value="Plate {pi}"/>\n' if plate_names else ""
         plate_xml.append(
-            f'  <plate>\n    <metadata key="plater_id" value="{pi}"/>\n    <metadata key="plater_name" value="Plate {pi}"/>\n'
-            f'    <metadata key="locked" value="false"/>\n    <metadata key="filament_maps" value="{" ".join(["1"] * filaments)}"/>\n'
+            f'  <plate>\n    <metadata key="plater_id" value="{pi}"/>\n{name}'
+            f'    <metadata key="locked" value="false"/>\n'
+            f'    <metadata key="filament_maps" value="{" ".join(["1"] * filaments)}"/>\n'
             f'    <metadata key="thumbnail_file" value="Metadata/plate_{pi}.png"/>\n{body}  </plate>\n'
         )
     model = (
         f'<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" {NS}>\n'
-        ' <metadata name="Application">BambuStudio-02.08.02.61</metadata>\n <resources>\n  '
+        ' <metadata name="Application">BambuStudio-02.08.02.61</metadata>\n'
+        ' <metadata name="Thumbnail_Middle">/Metadata/plate_1.png</metadata>\n <resources>\n  '
         + "\n  ".join(resources)
         + '\n </resources>\n <build p:UUID="2c7c17d8-22b5-4d84-8835-1976022ea369">\n  '
         + "\n  ".join(items)
@@ -134,8 +155,9 @@ def make_project_3mf(
         z.writestr(
             "_rels/.rels",
             '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-            ' <Relationship Target="/3D/3dmodel.model" Id="rel-1" '
-            'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>',
+            f' <Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="{MODEL_REL}"/>'
+            ' <Relationship Target="/Metadata/plate_1.png" Id="rel-2" '
+            'Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"/></Relationships>',
         )
         z.writestr("3D/3dmodel.model", model)
         z.writestr(

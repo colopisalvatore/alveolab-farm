@@ -56,6 +56,9 @@ GAP_TALL_MM = 6.0
 GAP_TALL_BRIM_MM = 10.0
 # Hard limit on build items in one output, whatever "as many as fit" finds.
 MAX_ITEMS = 400
+# Unpacked size accepted per source file, and for all the sources of one build.
+MAX_SOURCE_BYTES = 400 * 2**20
+MAX_TOTAL_BYTES = 800 * 2**20
 # Z angles tried when looking for the smallest footprint.
 ROTATION_STEP_DEG = 3
 
@@ -92,7 +95,9 @@ class Footprint:
     height: float
     min_x: float
     min_y: float
-    min_z: float
+    # Z translation of the new item: the source's own, lowered onto the bed if
+    # the printed parts were floating, never raised (a sunk object stays sunk).
+    tz: float
     gap: float = 0.0
 
 
@@ -121,6 +126,7 @@ class _Source:
     names: dict[str, str]
     plate_head: str
     instances: list[tuple[str, int]]  # (object id, instance index) on the chosen plate
+    non_printing: dict[str, frozenset[str]]  # object id -> component ids that are not normal parts
 
 
 def _read(zf: zipfile.ZipFile, name: str) -> str:
@@ -154,6 +160,14 @@ def _open_source(src: PlateSource) -> _Source:
         zf = zipfile.ZipFile(io.BytesIO(src.data))
     except zipfile.BadZipFile as e:
         raise PlateBuildError(f"{src.label or 'source'}: not a 3MF file") from e
+    # Everything below reads whole entries into memory: refuse what would not fit
+    # before reading anything (a big real mesh, or a crafted highly compressed entry).
+    unpacked = sum(info.file_size for info in zf.infolist())
+    if unpacked > MAX_SOURCE_BYTES:
+        raise PlateBuildError(
+            f"{src.label or 'source'}: {unpacked // 2**20} MB once unpacked, "
+            f"more than the {MAX_SOURCE_BYTES // 2**20} MB a plate build accepts"
+        )
     model = _read(zf, MODEL_PATH)
     settings = _read(zf, MODEL_SETTINGS_PATH)
     try:
@@ -204,7 +218,13 @@ def _open_source(src: PlateSource) -> _Source:
     if not instances:
         raise PlateBuildError(f"{src.label or 'source'}: plate {src.plate} is empty")
     head = re.search(r"<plate>.*?(?=<model_instance>|</plate>)", plate, re.S).group(0)
-    return _Source(zf, model, settings, project, objects, items, names, head, instances)
+    non_printing = {
+        oid: frozenset(
+            m.group(1) for m in re.finditer(r'<part id="(\d+)" subtype="([^"]*)"', block) if m.group(2) != "normal_part"
+        )
+        for oid, block in _object_blocks_in_settings(settings).items()
+    }
+    return _Source(zf, model, settings, project, objects, items, names, head, instances, non_printing)
 
 
 # ------------------------------------------------------------- geometry
@@ -244,11 +264,15 @@ def _vertices(zf: zipfile.ZipFile, path: str, object_id: str, cache: dict) -> np
     return cache[key]
 
 
-def _component_vertices(zf: zipfile.ZipFile, own_path: str, body: str, cache: dict) -> np.ndarray:
+def _component_vertices(
+    zf: zipfile.ZipFile, own_path: str, body: str, cache: dict, skip: frozenset[str] = frozenset()
+) -> np.ndarray:
     chunks = []
     for c in re.finditer(r"<component\b[^>]*/>", body):
         tag = c.group(0)
         oid = re.search(r'objectid="(\d+)"', tag).group(1)
+        if oid in skip:
+            continue
         path = re.search(r'p:path="([^"]+)"', tag)
         tr = re.search(r'transform="([^"]*)"', tag)
         rot, off = _matrix(tr.group(1) if tr else None)
@@ -259,12 +283,19 @@ def _component_vertices(zf: zipfile.ZipFile, own_path: str, body: str, cache: di
 
 
 def _object_vertices(src: _Source, object_id: str, cache: dict) -> np.ndarray:
+    """Vertices of the parts that print: modifiers, negative volumes and support
+    blockers/enforcers are components of the same object but take no room on the
+    bed and must not decide where the object sits."""
     block = src.objects[object_id]
     inner = re.search(r"<object[^>]*>(.*)</object>", block, re.S).group(1)
     if "<mesh>" in inner:
         pts = re.findall(r'<vertex x="([^"]+)" y="([^"]+)" z="([^"]+)"', inner)
         return np.array(pts, dtype=float)
-    return _component_vertices(src.zf, "/" + MODEL_PATH, inner, cache)
+    skip = src.non_printing.get(object_id, frozenset())
+    pts = _component_vertices(src.zf, "/" + MODEL_PATH, inner, cache, skip)
+    if not len(pts) and skip:
+        pts = _component_vertices(src.zf, "/" + MODEL_PATH, inner, cache)
+    return pts
 
 
 def _hull(points: np.ndarray) -> np.ndarray:
@@ -301,7 +332,7 @@ def _footprint(src_index: int, src: _Source, object_id: str, instance: int, cach
     tags = src.items[object_id]
     tag = tags[instance] if instance < len(tags) else tags[0]
     tr = re.search(r'transform="([^"]*)"', tag)
-    rot, _ = _matrix(tr.group(1) if tr else None)
+    rot, offset = _matrix(tr.group(1) if tr else None)
     local = _object_vertices(src, object_id, cache)
     if not len(local):
         raise PlateBuildError(f"{src.names.get(object_id, object_id)} has no geometry")
@@ -318,6 +349,7 @@ def _footprint(src_index: int, src: _Source, object_id: str, instance: int, cach
             best = (area, deg, lo, hi)
     _, deg, lo, hi = best
     final = rot @ _rz(deg)
+    bottom = float(world[:, 2].min()) + float(offset[2])
     return Footprint(
         source=src_index,
         object_id=object_id,
@@ -328,7 +360,7 @@ def _footprint(src_index: int, src: _Source, object_id: str, instance: int, cach
         height=float(world[:, 2].max() - world[:, 2].min()),
         min_x=float(lo[0]),
         min_y=float(lo[1]),
-        min_z=float(world[:, 2].min()),
+        tz=float(offset[2]) - max(bottom, 0.0),
     )
 
 
@@ -385,8 +417,10 @@ def pack(
     order = sorted(range(len(pieces)), key=lambda i: (-pieces[i].depth, -pieces[i].width))
     out: list[tuple[float, float] | None] = [None] * len(pieces)
     row_y, row_top, row_gap = y0, y0, 0.0
+    row_used = False  # something placed in the current row
     cur_x: float | None = None  # right edge of the last thing in the row
     prev_gap = 0.0
+    last_hit: tuple[float, float, float, float] | None = None
     for i in order:
         p = pieces[i]
         while True:
@@ -394,7 +428,16 @@ def pack(
             if left + p.width > x1:
                 if cur_x is None:
                     return None  # wider than the bed
-                row_y, cur_x, prev_gap, row_gap = row_top + max(row_gap, p.gap), None, 0.0, 0.0
+                if row_used:
+                    new_y = row_top + max(row_gap, p.gap)
+                elif last_hit is not None:
+                    # Nothing fits beside the zone in this row: start above it.
+                    new_y = last_hit[3] + EDGE_MM
+                else:  # pragma: no cover - cur_x is only set by a piece or a zone
+                    return None
+                if new_y <= row_y:
+                    return None  # never loop on the same row
+                row_y, row_top, cur_x, prev_gap, row_gap, row_used, last_hit = new_y, new_y, None, 0.0, 0.0, False, None
                 continue
             if row_y + p.depth > y1:
                 return None
@@ -411,15 +454,21 @@ def pack(
             )
             if hit is None:
                 break
-            cur_x, prev_gap = hit[2], EDGE_MM
+            cur_x, prev_gap, last_hit = hit[2], EDGE_MM, hit
         out[i] = (left, row_y)
-        cur_x, prev_gap = left + p.width, p.gap
+        cur_x, prev_gap, row_used = left + p.width, p.gap, True
         row_top = max(row_top, row_y + p.depth)
         row_gap = max(row_gap, p.gap)
     return out  # type: ignore[return-value]
 
 
 # ---------------------------------------------------------------- writing
+
+
+def _rel_target(tag: str) -> str:
+    """Target of a <Relationship .../> tag, whatever the attribute order, without the leading slash."""
+    m = re.search(r'\bTarget="([^"]*)"', tag)
+    return m.group(1).lstrip("/") if m else ""
 
 
 def _item_uuid(n: int) -> str:
@@ -445,6 +494,17 @@ def build_plate(
         raise PlateBuildError("No source plate given")
     if sets is not None and sets < 1:
         raise PlateBuildError("sets must be at least 1")
+    total = 0
+    for s in {id(s.data): s for s in sources}.values():
+        try:
+            total += sum(info.file_size for info in zipfile.ZipFile(io.BytesIO(s.data)).infolist())
+        except zipfile.BadZipFile:
+            pass  # _open_source says it properly
+    if total > MAX_TOTAL_BYTES:
+        raise PlateBuildError(
+            f"The sources are {total // 2**20} MB once unpacked, more than the "
+            f"{MAX_TOTAL_BYTES // 2**20} MB a plate build accepts"
+        )
     opened = [_open_source(s) for s in sources]
 
     project = opened[0].project
@@ -471,11 +531,14 @@ def build_plate(
             elif fp.height <= FLAT_HEIGHT_MM:
                 fp.gap = GAP_FLAT_MM
             else:
-                fp.gap = GAP_TALL_BRIM_MM if _brim_on(src.project, blocks.get(oid, "")) else GAP_TALL_MM
+                # The brim that matters is the one of the settings that will be sliced.
+                fp.gap = GAP_TALL_BRIM_MM if _brim_on(project, blocks.get(oid, "")) else GAP_TALL_MM
             for _ in range(max(1, spec.copies)):
                 per_set.append(fp)
     if not per_set:
         raise PlateBuildError("Nothing to place")
+    if len(per_set) > MAX_ITEMS:
+        raise PlateBuildError(f"One set has {len(per_set)} pieces: a plate takes at most {MAX_ITEMS}")
 
     def layout(n: int):
         return pack(per_set * n, area, excluded)
@@ -493,6 +556,8 @@ def build_plate(
     if sets is None:
         sets = max_sets
     elif sets > max_sets:
+        if (max_sets + 1) * len(per_set) > MAX_ITEMS:
+            raise PlateBuildError(f"{sets} sets are more than {MAX_ITEMS} pieces on one plate: at most {max_sets}")
         raise PlateBuildError(
             f"{sets} sets do not fit on a {bed_size[0]:.0f}x{bed_size[1]:.0f} bed: at most {max_sets}"
         )
@@ -505,7 +570,7 @@ def build_plate(
     model = base.model
     settings = base.settings
     rels = base.zf.read(MODEL_RELS_PATH).decode("utf-8") if MODEL_RELS_PATH in base.zf.namelist() else None
-    extra_files: dict[str, bytes] = {}
+    extra_files: dict[str, tuple[int, str]] = {}  # new path -> (source index, path in that source)
     id_map: list[dict[str, str]] = [{} for _ in opened]
     kept_resource_blocks: list[str] = []
     kept_settings_blocks: list[str] = []
@@ -536,9 +601,10 @@ def build_plate(
                     sb = re.sub(r'<object id="\d+"', f'<object id="{new_id}"', sb, count=1)
                 kept_settings_blocks.append(sb if sb.endswith("\n") else sb + "\n")
         if si:
+            # Same renaming as the p:path rewrite above (subfolders included).
             for info in src.zf.infolist():
                 if info.filename.startswith("3D/Objects/"):
-                    extra_files[f"3D/Objects/{prefix}{info.filename.split('/')[-1]}"] = src.zf.read(info.filename)
+                    extra_files[f"3D/Objects/{prefix}{info.filename[len('3D/Objects/') :]}"] = (si, info.filename)
 
     # Resources: only the kept objects (other sources' objects included).
     model = re.sub(
@@ -556,7 +622,7 @@ def build_plate(
     for n, (fp, spot) in enumerate(zip(pieces, spots, strict=True), start=1):
         new_oid = id_map[fp.source][fp.object_id]
         rot = fp.rotation
-        tx, ty, tz = spot[0] - fp.min_x, spot[1] - fp.min_y, -fp.min_z
+        tx, ty, tz = spot[0] - fp.min_x, spot[1] - fp.min_y, fp.tz
         transform = " ".join(_fmt(v) for v in rot) + f" {tx:.4f} {ty:.4f} {tz:.4f}"
         new_items.append(f'<item objectid="{new_oid}" p:UUID="{_item_uuid(n)}" transform="{transform}" printable="1"/>')
         k = instance_count.get(new_oid, 0)
@@ -584,7 +650,15 @@ def build_plate(
         head = re.sub(rf'\s*<metadata key="{key}" value="[^"]*"/>', "", head)
     if plate_name is not None:
         safe = plate_name.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
-        head = re.sub(r'(key="plater_name" value=")[^"]*', lambda m: m.group(1) + safe, head)
+        if 'key="plater_name"' in head:
+            head = re.sub(r'(key="plater_name" value=")[^"]*', lambda m: m.group(1) + safe, head)
+        else:
+            head = re.sub(
+                r'(<metadata key="plater_id" value="\d+"/>)',
+                lambda m: m.group(1) + f'\n    <metadata key="plater_name" value="{safe}"/>',
+                head,
+                count=1,
+            )
     head = re.sub(r'(key="filament_maps" value=")[^"]*', r"\g<1>" + " ".join(["1"] * filament_count), head)
     new_plate = head.rstrip() + "\n" + "\n".join(plate_instances) + "\n  </plate>\n"
 
@@ -599,6 +673,11 @@ def build_plate(
             raise PlateBuildError(f"Filament {extruder} does not exist: the settings have {filament_count}")
         body = re.sub(r'(<metadata key="extruder" value=")\d+', rf"\g<1>{extruder}", body)
     used = sorted({int(v) for v in re.findall(r'<metadata key="extruder" value="(\d+)"', body)} or {1})
+    if used[-1] > filament_count:
+        raise PlateBuildError(
+            f"The pieces use filament {used[-1]} but the settings have {filament_count}: "
+            "choose the filament to print them with (extruder)"
+        )
 
     if filament_colour is not None:
         if not re.fullmatch(r"#?[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?", filament_colour):
@@ -613,17 +692,33 @@ def build_plate(
     if rels is not None:
 
         def keep_rel(m: re.Match) -> str:
-            target = m.group(1).lstrip("/")
+            target = _rel_target(m.group(0))
             return m.group(0) if target in used_paths or not target.startswith("3D/Objects/") else ""
 
-        rels = re.sub(r'\s*<Relationship Target="([^"]+)"[^>]*/>', keep_rel, rels)
+        rels = re.sub(r"\s*<Relationship\b[^>]*/>", keep_rel, rels)
         added = "".join(
-            f'\n <Relationship Target="/{name}" Id="rel-{name.split("/")[-1].replace(".", "-")}" '
+            f'\n <Relationship Target="/{name}" Id="rel-{name[len("3D/Objects/") :].replace("/", "-").replace(".", "-")}" '
             'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
             for name in extra_files
             if name in used_paths
         )
         rels = rels.replace("</Relationships>", added + "\n</Relationships>")
+
+    # The plate pictures are dropped (they show the old plates): so are the
+    # references to them, or readers look for a thumbnail that is not there.
+    model = re.sub(
+        r"\s*<metadata name=\"Thumbnail_\w+\">([^<]*)</metadata>",
+        lambda m: "" if _SKIP_ENTRIES.match(m.group(1).strip().lstrip("/")) else m.group(0),
+        model,
+    )
+    root_rels_path = "_rels/.rels"
+    root_rels = base.zf.read(root_rels_path).decode("utf-8") if root_rels_path in base.zf.namelist() else None
+    if root_rels is not None:
+        root_rels = re.sub(
+            r"\s*<Relationship\b[^>]*/>",
+            lambda m: "" if _SKIP_ENTRIES.match(_rel_target(m.group(0))) else m.group(0),
+            root_rels,
+        )
 
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zo:
@@ -641,12 +736,15 @@ def build_plate(
                 data = json.dumps(project, indent=4).encode("utf-8")
             elif name == MODEL_RELS_PATH and rels is not None:
                 data = rels.encode("utf-8")
+            elif name == root_rels_path and root_rels is not None:
+                data = root_rels.encode("utf-8")
             else:
                 data = base.zf.read(name)
             zo.writestr(info, data)
-        for name, data in extra_files.items():
+        # Only the mesh files the kept objects point at are read and copied.
+        for name, (si, original) in extra_files.items():
             if name in used_paths:
-                zo.writestr(name, data)
+                zo.writestr(name, opened[si].zf.read(original))
 
     names = []
     for fp in per_set:
