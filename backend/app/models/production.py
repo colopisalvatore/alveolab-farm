@@ -22,7 +22,11 @@ from backend.app.core.database import Base
 
 class ProductionRecipe(Base):
     __tablename__ = "production_recipes"
-    __table_args__ = (UniqueConstraint("name", "variant", name="uq_production_recipe_name_variant"),)
+    # AUTOINCREMENT on SQLite: a deleted recipe's id is never handed to a new one.
+    __table_args__ = (
+        UniqueConstraint("name", "variant", name="uq_production_recipe_name_variant"),
+        {"sqlite_autoincrement": True},
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     # Product name as the shop and the lab say it ("Fiocco"), and the variant ("Ghiaccio"; "" = the default one).

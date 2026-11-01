@@ -25,37 +25,35 @@ def norm(text: str | None) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
+DEFAULT_VARIANTS = {"", "classica", "classico", "standard", "default", "default title"}
+
+
 def match_recipe(recipes: list[dict], name: str, variant: str | None = None) -> dict | None:
-    """The recipe a name means: exact name (+ variant), or an alias, or the name
-    and variant both found in a longer text such as a shop title.
+    """The recipe a name means, or None: better to tell "no recipe" than to book an order on the
+    wrong product. Accepted: the name or an alias, with the variant given apart (a default variant
+    such as "Classica" means the recipe without variant), or "name variant" written together.
 
     ``recipes`` items need ``id``, ``name``, ``variant``, ``aliases``.
-    With no variant given, a recipe without variant wins over one with.
     """
     want, want_variant = norm(name), norm(variant)
+    if want_variant in DEFAULT_VARIANTS:
+        want_variant = ""
     if not want:
         return None
 
     def names(r: dict) -> list[str]:
         return [norm(r["name"])] + [norm(a) for a in (r.get("aliases") or [])]
 
-    exact = [r for r in recipes if want in names(r) and norm(r.get("variant")) == want_variant]
-    if exact:
-        return exact[0]
-    # "Fiocco Ghiaccio" or "Fiocco - Ghiaccio" as one text.
-    candidates = []
     for r in recipes:
-        for n in names(r):
-            if n and re.search(rf"\b{re.escape(n)}\b", want):
-                v = norm(r.get("variant"))
-                if v and (v == want_variant or re.search(rf"\b{re.escape(v)}\b", want)):
-                    candidates.append((2, r))
-                elif not v and (not want_variant or want_variant in ("classica", "classico", "standard")):
-                    candidates.append((1, r))
-    if not candidates:
+        if want in names(r) and norm(r.get("variant")) == want_variant:
+            return r
+    if want_variant:
         return None
-    candidates.sort(key=lambda c: -c[0])
-    return candidates[0][1]
+    for r in recipes:
+        v = norm(r.get("variant"))
+        if v and any(want == f"{n} {v}" for n in names(r)):
+            return r
+    return None
 
 
 @dataclass

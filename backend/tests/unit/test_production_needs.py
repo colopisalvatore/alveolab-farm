@@ -61,14 +61,27 @@ def test_names_compare_without_case_accents_or_extra_spaces():
     assert norm("  Nevio  Pelúche ") == "nevio peluche"
 
 
-def test_match_by_name_variant_alias_and_shop_title():
+def test_match_by_name_variant_alias():
     assert match_recipe(RECIPES, "fiocco")["id"] == 1
     assert match_recipe(RECIPES, "Fiocco", "Ghiaccio")["id"] == 2
+    assert match_recipe(RECIPES, "Fiocco", "Classica")["id"] == 1
     assert match_recipe(RECIPES, "pupazzo di neve")["id"] == 1
-    assert match_recipe(RECIPES, "Fiocco - Ghiaccio")["id"] == 2
-    assert match_recipe(RECIPES, "Decorazione a maglia Fiocco", "Classica")["id"] == 1
+    assert match_recipe(RECIPES, "Fiocco Ghiaccio")["id"] == 2
     assert match_recipe(RECIPES, "Cometa") is None
     assert match_recipe(RECIPES, "") is None
+
+
+def test_no_guessing_on_unknown_variants_or_longer_names():
+    # Better "no recipe" than an order booked on the wrong product.
+    assert match_recipe(RECIPES, "Fiocco", "Rosa") is None
+    assert match_recipe(RECIPES, "Fiocco Rosa") is None
+    assert match_recipe(RECIPES, "Fiocco Ghiaccio", "Rosa") is None
+    trees = [
+        {"id": 7, "name": "Albero", "variant": "", "aliases": []},
+        {"id": 8, "name": "Albero di Natale", "variant": "", "aliases": []},
+    ]
+    assert match_recipe(trees, "Albero di Natale")["id"] == 8
+    assert match_recipe(trees, "Albero di Natale Rosso") is None
 
 
 def test_needs_per_colour_after_stock_and_prepared_plates():

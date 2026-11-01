@@ -117,7 +117,8 @@ class AssembleIn(BaseModel):
 
 class PlateContent(BaseModel):
     recipe_id: int
-    component_key: str = Field(..., max_length=60)
+    # A component: plates print parts, finished products are made by /assemble.
+    component_key: str = Field(..., min_length=1, max_length=60)
     sets: int = Field(..., ge=1, le=1000)
 
 

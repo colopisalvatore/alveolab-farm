@@ -132,3 +132,65 @@ class TestProduction:
         assert resp.json()["recipe_id"] == ice["id"]
         changed = {**FIOCCO, "components": FIOCCO["components"][:1]}
         assert len((await async_client.put(f"{API}/recipes/{fiocco['id']}", json=changed)).json()["components"]) == 1
+
+
+class TestProductionSafety:
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_recipe_in_use_cannot_be_deleted_and_ids_are_not_reused(self, async_client: AsyncClient):
+        a = await _recipe(async_client, FIOCCO)
+        b = await _recipe(async_client, {**FIOCCO, "name": "Frac"})
+        await async_client.post(f"{API}/demand", json={"recipe_id": b["id"], "qty": 2})
+        assert (await async_client.delete(f"{API}/recipes/{b['id']}")).status_code == 409
+
+        demand = (await async_client.get(f"{API}/demand")).json()
+        await async_client.post(f"{API}/demand/{demand[0]['id']}/close", json={"status": "cancelled"})
+        await async_client.put(f"{API}/stock", json={"recipe_id": b["id"], "component_key": "corpo", "qty": 3})
+        assert (await async_client.delete(f"{API}/recipes/{b['id']}")).status_code == 200
+        c = await _recipe(async_client, {**FIOCCO, "name": "Nicola"})
+        assert c["id"] not in (a["id"], b["id"])
+        assert (await async_client.get(f"{API}/stock")).json() == []
+        assert await _needs(async_client) == {}
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_component_in_use_cannot_be_removed(self, async_client: AsyncClient):
+        fiocco = await _recipe(async_client, FIOCCO)
+        await async_client.post(
+            f"{API}/plates", json={"contents": [{"recipe_id": fiocco["id"], "component_key": "sciarpa", "sets": 1}]}
+        )
+        resp = await async_client.put(
+            f"{API}/recipes/{fiocco['id']}", json={**FIOCCO, "components": FIOCCO["components"][:1]}
+        )
+        assert resp.status_code == 409 and "sciarpa" in resp.json()["detail"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_plates_print_parts_not_finished_products(self, async_client: AsyncClient):
+        fiocco = await _recipe(async_client, FIOCCO)
+        resp = await async_client.post(
+            f"{API}/plates", json={"contents": [{"recipe_id": fiocco["id"], "component_key": "", "sets": 1}]}
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_a_closed_order_line_is_not_rewritten(self, async_client: AsyncClient):
+        fiocco = await _recipe(async_client, FIOCCO)
+        line = (
+            await async_client.post(f"{API}/demand", json={"recipe_id": fiocco["id"], "qty": 2, "external_ref": "x:1"})
+        ).json()
+        await async_client.post(f"{API}/demand/{line['id']}/close", json={"status": "done", "ship": False})
+        again = (
+            await async_client.post(f"{API}/demand", json={"recipe_id": fiocco["id"], "qty": 9, "external_ref": "x:1"})
+        ).json()
+        assert (again["status"], again["qty"]) == ("done", 2)
+        # Closing twice ships once.
+        await async_client.put(f"{API}/stock", json={"recipe_id": fiocco["id"], "qty": 5})
+        line2 = (
+            await async_client.post(f"{API}/demand", json={"recipe_id": fiocco["id"], "qty": 2, "external_ref": "x:2"})
+        ).json()
+        for _ in range(2):
+            await async_client.post(f"{API}/demand/{line2['id']}/close", json={"status": "done"})
+        stock = {s["component_key"]: s["qty"] for s in (await async_client.get(f"{API}/stock")).json()}
+        assert stock[""] == 3
