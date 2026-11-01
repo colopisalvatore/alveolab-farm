@@ -207,10 +207,30 @@ class SlicedForCC2:
     sliced_for: str | None = None
     bed_type: str | None = None
     thumbnail: bytes | None = None
+    # Totals from the G-code's own footer, for when the sidecar's headers are missing.
+    filament_used_g: float | None = None
+    filament_used_mm: float | None = None
+    layer_height: float | None = None
 
 
 class TooManyPlatesForCC2(ValueError):
     """A 3MF sliced for a CC2 with more than one plate: the printer takes one G-code file."""
+
+
+_TOTAL_RE = re.compile(
+    rb"^;\s*(total filament used \[g\]|filament used \[g\]|filament used \[mm\]|layer_height)\s*=\s*([^\r\n]+)$",
+    re.MULTILINE,
+)
+
+
+def _footer_number(found: dict[str, str], key: str) -> float | None:
+    raw = found.get(key)
+    if not raw:
+        return None
+    try:
+        return sum(float(v) for v in raw.replace(";", ",").split(",") if v.strip())
+    except ValueError:
+        return None
 
 
 def cc2_gcode_from_sliced_3mf(content: bytes) -> SlicedForCC2 | None:
@@ -219,25 +239,33 @@ def cc2_gcode_from_sliced_3mf(content: bytes) -> SlicedForCC2 | None:
     The slicer CLI path always produces a ``.gcode.3mf``; the CC2 jams on a 3MF
     sent over the network (HW-M4-03) and prints the plain ``plate_N.gcode``
     inside it. Raises :class:`TooManyPlatesForCC2` for a multi-plate result.
+
+    Runs on every library slice, so a result that names another printer in its
+    project settings is let go without decompressing any G-code; a CC2 plate is
+    decompressed once.
     """
     try:
         zf = zipfile.ZipFile(io.BytesIO(content))
     except zipfile.BadZipFile:
         return None
     with zf:
-        plates = sorted(n for n in zf.namelist() if _PLATE_GCODE_RE.match(n))
+        names = zf.namelist()
+        plates = sorted(n for n in names if _PLATE_GCODE_RE.match(n))
         if not plates:
             return None
-        info = zf.getinfo(plates[0])
-        with zf.open(plates[0]) as handle:
-            head = handle.read(_HEAD_BYTES)
-            tail = b""
-            if info.file_size > _HEAD_BYTES:
-                remaining = info.file_size - _HEAD_BYTES
-                skip = max(0, remaining - _TAIL_BYTES)
-                while skip:
-                    skip -= len(handle.read(min(skip, 1024 * 1024)))
-                tail = handle.read()
+        if "Metadata/project_settings.config" in names:
+            try:
+                project = json.loads(zf.read("Metadata/project_settings.config"))
+            except ValueError:
+                project = {}
+            if isinstance(project, dict):
+                named = [project.get(k) for k in ("printer_model", "printer_settings_id")]
+                named = [v[0] if isinstance(v, list) and v else v for v in named]
+                named = [v for v in named if isinstance(v, str) and v.strip()]
+                if named and not any(is_cc2_model(v) for v in named):
+                    return None
+        gcode = zf.read(plates[0])
+        head, tail = gcode[:_HEAD_BYTES], gcode[-_TAIL_BYTES:]
         settings = _settings_from_gcode_bytes(head, tail)
         if not (is_cc2_model(settings.get("printer_model")) or is_cc2_model(settings.get("printer_settings_id"))):
             return None
@@ -245,13 +273,21 @@ def cc2_gcode_from_sliced_3mf(content: bytes) -> SlicedForCC2 | None:
             raise TooManyPlatesForCC2(
                 f"sliced {len(plates)} plates for the Centauri 2, which takes one G-code file: slice one plate"
             )
+        totals: dict[str, str] = {}
+        for chunk in (head, tail):
+            for key, value in _TOTAL_RE.findall(chunk):
+                totals.setdefault(key.decode("ascii"), value.decode("utf-8", errors="replace").strip())
         index = int(re.search(r"plate_(\d+)\.gcode$", plates[0]).group(1))
         picture = f"Metadata/plate_{index}.png"
-        thumbnail = zf.read(picture) if picture in zf.namelist() else None
+        layer = _footer_number(totals, "layer_height")
         return SlicedForCC2(
-            gcode=zf.read(plates[0]),
+            gcode=gcode,
             plate_index=index,
             sliced_for=settings.get("printer_model") or settings.get("printer_settings_id"),
             bed_type=settings.get("curr_bed_type") or None,
-            thumbnail=thumbnail,
+            thumbnail=zf.read(picture) if picture in names else None,
+            filament_used_g=_footer_number(totals, "total filament used [g]")
+            or _footer_number(totals, "filament used [g]"),
+            filament_used_mm=_footer_number(totals, "filament used [mm]"),
+            layer_height=layer,
         )

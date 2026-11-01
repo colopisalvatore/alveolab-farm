@@ -25,10 +25,12 @@ CC2_COOL = (
 P1S = "G28\n; curr_bed_type = Textured PEI Plate\n; printer_model = Bambu Lab P1S\n"
 
 
-def _sliced(plates: dict[int, str], png: bool = True) -> bytes:
+def _sliced(plates: dict[int, str], png: bool = True, project: str | None = None) -> bytes:
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w") as zf:
         zf.writestr("3D/3dmodel.model", "<model/>")
+        if project is not None:
+            zf.writestr("Metadata/project_settings.config", project)
         for n, text in plates.items():
             zf.writestr(f"Metadata/plate_{n}.gcode", text)
             if png:
@@ -88,3 +90,18 @@ def test_more_than_one_cc2_plate_is_refused():
 
 def test_no_picture_is_fine():
     assert cc2_gcode_from_sliced_3mf(_sliced({1: CC2_COOL}, png=False)).thumbnail is None
+
+
+def test_a_result_for_another_printer_is_let_go_from_its_project_settings():
+    # The plate G-code would say CC2, but the project says P1S: decided without reading it.
+    assert cc2_gcode_from_sliced_3mf(_sliced({1: CC2_COOL}, project='{"printer_model": "Bambu Lab P1S"}')) is None
+    got = cc2_gcode_from_sliced_3mf(_sliced({1: CC2_COOL}, project='{"printer_model": ["Elegoo Centauri 2"]}'))
+    assert got is not None
+
+
+def test_footer_totals_are_read():
+    footer = "; filament used [g] = 3.50, 1.25\n; filament used [mm] = 900\n; layer_height = 0.16\n"
+    got = cc2_gcode_from_sliced_3mf(_sliced({1: CC2_COOL + footer}))
+    assert got.filament_used_g == 4.75
+    assert got.filament_used_mm == 900
+    assert got.layer_height == 0.16

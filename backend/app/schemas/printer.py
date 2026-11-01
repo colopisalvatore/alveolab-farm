@@ -5,6 +5,18 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.app.utils.printer_models import supports_nozzle_flow_type
 
+# Build plate names as Bambu Studio / OrcaSlicer write them in ``curr_bed_type``.
+BED_TYPES = (
+    "Cool Plate",
+    "Engineering Plate",
+    "High Temp Plate",
+    "Textured PEI Plate",
+    "Smooth PEI Plate",
+    "Textured Cool Plate",
+    "Cool Plate (SuperTack)",
+    "Supertack Plate",
+)
+
 
 class PrinterBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -102,6 +114,19 @@ class PrinterUpdate(BaseModel):
     plate_detection_roi: PlateDetectionROI | None = None
     # Build plate mounted now, as the slicer names it ("Cool Plate"...); null = unknown.
     bed_type: str | None = Field(default=None, max_length=40)
+
+    @field_validator("bed_type")
+    @classmethod
+    def _known_bed_type(cls, value: str | None) -> str | None:
+        """Only plate names the slicers write in ``curr_bed_type``: a typo here
+        would make every file for this printer fail the plate check."""
+        if value is None:
+            return None
+        canonical = {name.lower(): name for name in BED_TYPES}
+        found = canonical.get(value.strip().lower())
+        if found is None:
+            raise ValueError(f"unknown build plate {value!r}: one of {', '.join(BED_TYPES)}")
+        return found
 
 
 class PrinterResponse(PrinterBase):

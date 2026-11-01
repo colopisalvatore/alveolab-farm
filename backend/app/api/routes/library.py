@@ -371,7 +371,9 @@ def _unique_external_name(ext_dir: Path, filename: str) -> str:
     return candidate
 
 
-def _resolve_slice_destination(target_folder: LibraryFolder | None, out_filename: str) -> tuple[Path, bool, str | None]:
+def _resolve_slice_destination(
+    target_folder: LibraryFolder | None, out_filename: str, managed_suffix: str = ".gcode.3mf"
+) -> tuple[Path, bool, str | None]:
     """Resolve where a slice result should be written.
 
     Returns ``(path, is_external, fallback_reason)``. ``fallback_reason`` is
@@ -391,20 +393,24 @@ def _resolve_slice_destination(target_folder: LibraryFolder | None, out_filename
     Unlike uploads, a failure here does not raise. The bytes exist and cost
     real time to produce, so an unwritable target falls back to managed storage
     with a reason attached rather than discarding the slice.
+
+    ``managed_suffix`` is the extension of a file in managed storage: the
+    readers (dispatch, the CC2 file check) go by the name on disk, so a plain
+    G-code must not be stored under a ``.gcode.3mf`` name.
     """
     if target_folder is None or not target_folder.is_external:
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, None
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, None
 
     if target_folder.external_readonly:
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_readonly"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_readonly"
     if not target_folder.external_path:
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_no_path"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_no_path"
 
     ext_dir = Path(target_folder.external_path)
     if not ext_dir.exists() or not ext_dir.is_dir():
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_unreachable"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_unreachable"
     if not os.access(ext_dir, os.W_OK):
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_not_writable"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_not_writable"
 
     try:
         dest = safe_join_under(ext_dir, _unique_external_name(ext_dir, out_filename), http=False)
@@ -412,7 +418,7 @@ def _resolve_slice_destination(target_folder: LibraryFolder | None, out_filename
         # The source filename reached us from a 3MF on disk, so this is
         # defensive rather than expected -- but a name that escapes the mount
         # must land in managed storage, never outside it.
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_invalid_name"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_invalid_name"
     return dest, True, None
 
 
@@ -4699,7 +4705,9 @@ async def _persist_cc2_gcode(
     CC2 gates read: ``sliced_for_model`` and the plate (``bed_type``).
     """
     out_filename = f"{base_name}.gcode"
-    out_path, out_is_external, external_fallback = _resolve_slice_destination(target_folder, out_filename)
+    out_path, out_is_external, external_fallback = _resolve_slice_destination(
+        target_folder, out_filename, managed_suffix=".gcode"
+    )
     if out_is_external:
         out_filename = out_path.name
     if external_fallback:
@@ -4714,17 +4722,20 @@ async def _persist_cc2_gcode(
     thumbnail_relative: str | None = None
     if cc2.thumbnail:
         thumb_path = get_library_thumbnails_dir() / f"{uuid.uuid4().hex}.png"
-        thumb_path.write_bytes(cc2.thumbnail)
+        await asyncio.to_thread(thumb_path.write_bytes, cc2.thumbnail)
         thumbnail_relative = to_relative_path(thumb_path)
 
+    # Some sidecar builds leave the X-Filament-Used-* headers unset: the
+    # G-code's own totals are the fallback, as ThreeMFParser is for a 3MF.
     metadata: dict = {
         "print_time_seconds": result.print_time_seconds,
-        "filament_used_g": result.filament_used_g or 0.0,
-        "filament_used_mm": result.filament_used_mm or 0.0,
+        "filament_used_g": result.filament_used_g or cc2.filament_used_g or 0.0,
+        "filament_used_mm": result.filament_used_mm or cc2.filament_used_mm or 0.0,
         "sliced_for_model": cc2.sliced_for,
     }
-    if cc2.bed_type:
-        metadata["bed_type"] = cc2.bed_type
+    for key, value in (("bed_type", cc2.bed_type), ("layer_height", cc2.layer_height)):
+        if value:
+            metadata[key] = value
     if used_embedded_settings:
         metadata["used_embedded_settings"] = True
     if external_fallback:
