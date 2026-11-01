@@ -370,6 +370,10 @@ class BuildPlateRequest(BaseModel):
     sets: int | None = Field(default=None, ge=1, le=400)
     # Take printer/process/filament settings (and so the bed) from another project 3MF.
     settings_from_file_id: int | None = None
+    # Lay out for the bed of this printer preset (local preset id), e.g. the one the
+    # plate will be sliced with: a designer file made for a bigger printer would
+    # otherwise land off the target's bed.
+    bed_preset_id: int | None = None
     # Gap between pieces in mm; None = 4 for flat pieces, 6 or 10 (with brim) for taller ones.
     gap_mm: float | None = Field(default=None, ge=0, le=50)
     # Print every object with this filament (1-based), e.g. to put pieces of two models on one colour.

@@ -484,12 +484,19 @@ def build_plate(
     *,
     sets: int | None = None,
     settings_from: bytes | None = None,
+    bed_from: dict | None = None,
     gap_mm: float | None = None,
     extruder: int | None = None,
     filament_colour: str | None = None,
     plate_name: str | None = None,
 ) -> PlateBuildResult:
-    """Lay ``sets`` sets of the given plates out on one plate (None = as many as fit)."""
+    """Lay ``sets`` sets of the given plates out on one plate (None = as many as fit).
+
+    ``bed_from`` is a printer profile (e.g. the one the plate will be sliced
+    with): its ``printable_area`` and ``bed_exclude_area`` replace the bed of the
+    project settings, in the layout and in the file. A designer file made for a
+    bigger printer would otherwise be laid out off the target's bed.
+    """
     if not sources:
         raise PlateBuildError("No source plate given")
     if sets is not None and sets < 1:
@@ -515,6 +522,11 @@ def build_plate(
         except (zipfile.BadZipFile, KeyError, json.JSONDecodeError) as e:
             raise PlateBuildError("The settings file is not a slicer project 3MF") from e
     project = json.loads(json.dumps(project))  # private copy, edited below
+    if bed_from is not None:
+        if not bed_from.get("printable_area"):
+            raise PlateBuildError("The printer profile has no printable_area")
+        project["printable_area"] = bed_from["printable_area"]
+        project["bed_exclude_area"] = bed_from.get("bed_exclude_area") or []
     area, excluded = bed_of(project)
 
     # One footprint per (source, plate instance); the same object placed twice on
