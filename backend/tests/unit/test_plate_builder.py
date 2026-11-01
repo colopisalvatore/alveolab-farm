@@ -325,3 +325,23 @@ def test_plate_name_is_added_when_the_source_plate_has_none():
     src = snowman_like(plate_names=False)
     (plate,) = _plates(build_plate([PlateSource(src, 1)], sets=1, plate_name="Bianco x4").content)
     assert 'key="plater_name" value="Bianco x4"' in plate
+
+
+def test_bed_from_a_printer_profile_replaces_the_designers_bed():
+    big = snowman_like(bed=330)
+    cc2 = {
+        "printable_area": ["0x0", "256x0", "256x256", "0x256"],
+        "bed_exclude_area": ["246x0", "256x0", "256x20", "246x20"],
+    }
+    result = build_plate([PlateSource(big, 1)], bed_from=cc2)
+    assert result.bed == (256.0, 256.0)
+    project = json.loads(_read(result.content)["Metadata/project_settings.config"])
+    assert project["printable_area"] == cc2["printable_area"]
+    assert project["bed_exclude_area"] == cc2["bed_exclude_area"]
+    for b in _boxes(result.content):
+        assert b[2] <= 256 - EDGE_MM + 1e-6 and b[3] <= 256 - EDGE_MM + 1e-6
+        assert not _overlap(b, (246, 0, 256, 20), gap=EDGE_MM - 1e-6)
+    assert result.sets < build_plate([PlateSource(big, 1)]).sets
+
+    with pytest.raises(PlateBuildError, match="no printable_area"):
+        build_plate([PlateSource(big, 1)], bed_from={"name": "x"})

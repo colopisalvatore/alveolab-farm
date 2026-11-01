@@ -1,6 +1,7 @@
 """Integration tests for POST /library/files/build-plate (project 3MF plates -> one packed plate)."""
 
 import io
+import json
 import re
 import zipfile
 
@@ -9,6 +10,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from backend.app.models.library import LibraryFile
+from backend.app.models.local_preset import LocalPreset
 from backend.tests._fixtures.plate_3mf import snowman_like
 
 
@@ -91,3 +93,33 @@ class TestBuildPlate:
             json={"items": [{"file_id": 999999, "plate": 1}], "filename": "x"},
         )
         assert resp.status_code == 404
+
+
+class TestBuildPlateForAPrinterPreset:
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_bed_of_a_local_printer_preset(self, async_client: AsyncClient, db_session):
+        src = await _upload(async_client, "Big.3mf", snowman_like(bed=330))
+        printer = LocalPreset(
+            name="Elegoo Centauri 2 0.4 nozzle",
+            preset_type="printer",
+            source="orcaslicer",
+            setting=json.dumps({"printable_area": ["0x0", "200x0", "200x200", "0x200"], "bed_exclude_area": []}),
+        )
+        process = LocalPreset(name="proc", preset_type="process", source="orcaslicer", setting="{}")
+        db_session.add_all([printer, process])
+        await db_session.commit()
+
+        resp = await async_client.post(
+            "/api/v1/library/files/build-plate",
+            json={"items": [{"file_id": src, "plate": 1}], "bed_preset_id": printer.id, "filename": "for cc2"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["bed_mm"] == [200.0, 200.0]
+
+        for bad in (process.id, 999999):
+            resp = await async_client.post(
+                "/api/v1/library/files/build-plate",
+                json={"items": [{"file_id": src, "plate": 1}], "bed_preset_id": bad, "filename": "x"},
+            )
+            assert resp.status_code == 404

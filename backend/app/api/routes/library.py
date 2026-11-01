@@ -3102,6 +3102,21 @@ async def build_plate_file(
     settings_from = None
     if request.settings_from_file_id is not None:
         settings_from = (await read_project(request.settings_from_file_id))[1]
+    bed_from = None
+    if request.bed_preset_id is not None:
+        from backend.app.models.local_preset import LocalPreset
+
+        preset = (
+            await db.execute(select(LocalPreset).where(LocalPreset.id == request.bed_preset_id))
+        ).scalar_one_or_none()
+        if preset is None or preset.preset_type != "printer":
+            raise HTTPException(status_code=404, detail="Printer preset not found")
+        try:
+            bed_from = json.loads(preset.setting)
+        except (TypeError, ValueError) as e:
+            raise HTTPException(status_code=400, detail="The printer preset is not readable") from e
+        if not isinstance(bed_from, dict):
+            raise HTTPException(status_code=400, detail="The printer preset is not readable")
 
     try:
         result = await asyncio.to_thread(
@@ -3109,6 +3124,7 @@ async def build_plate_file(
             sources,
             sets=request.sets,
             settings_from=settings_from,
+            bed_from=bed_from,
             gap_mm=request.gap_mm,
             extruder=request.extruder,
             filament_colour=request.filament_colour,
