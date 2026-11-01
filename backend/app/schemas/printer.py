@@ -100,6 +100,8 @@ class PrinterUpdate(BaseModel):
     camera_rotation: int | None = None  # 0, 90, 180, 270 degrees
     plate_detection_enabled: bool | None = None
     plate_detection_roi: PlateDetectionROI | None = None
+    # Build plate mounted now, as the slicer names it ("Cool Plate"...); null = unknown.
+    bed_type: str | None = Field(default=None, max_length=40)
 
 
 class PrinterResponse(PrinterBase):
@@ -119,6 +121,7 @@ class PrinterResponse(PrinterBase):
     camera_rotation: int = 0  # 0, 90, 180, 270 degrees
     plate_detection_enabled: bool = False
     plate_detection_roi: PlateDetectionROI | None = None
+    bed_type: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -147,6 +150,7 @@ class PrinterResponse(PrinterBase):
             "supports_nozzle_flow_type": supports_nozzle_flow_type(printer.model),
             "print_hours_offset": printer.print_hours_offset,
             "plate_detection_enabled": printer.plate_detection_enabled,
+            "bed_type": getattr(printer, "bed_type", None),
             "created_at": printer.created_at,
             "updated_at": printer.updated_at,
         }

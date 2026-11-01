@@ -170,6 +170,14 @@ class SliceRequest(BaseModel):
             "process preset unchanged (#1337)."
         ),
     )
+    printer_id: int | None = Field(
+        default=None,
+        description=(
+            "ALVEOLAB Farm: printer the file is sliced for. When ``bed_type`` is not "
+            "given, the build plate mounted on that printer (``printers.bed_type``) is "
+            "used, so the bed temperature matches the plate actually on the machine."
+        ),
+    )
     auto_orient: bool = Field(
         default=False,
         description=(

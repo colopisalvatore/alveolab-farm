@@ -8501,7 +8501,11 @@ class PrintScheduler:
             COMMAND_NO_REPLY,
             STARTABLE_STATES,
         )
-        from backend.app.services.printer_providers.elegoo.files import check_printable_on_cc2, printer_filename
+        from backend.app.services.printer_providers.elegoo.files import (
+            bed_type_mismatch,
+            check_printable_on_cc2,
+            printer_filename,
+        )
         from backend.app.services.printer_providers.elegoo.slots import file_filaments, plan_slot_map
         from backend.app.services.printer_providers.elegoo.upload import upload_file
 
@@ -8523,6 +8527,11 @@ class PrintScheduler:
         check = await asyncio.to_thread(check_printable_on_cc2, file_path)
         if not check.ok:
             await self._fail_provider_item(db, item, printer, f"File refused: {check.message}", "incompatible_file")
+            return
+        # The plate may have been flipped while the item waited in the queue.
+        wrong_plate = bed_type_mismatch(check.bed_type, getattr(printer, "bed_type", None))
+        if wrong_plate:
+            await self._fail_provider_item(db, item, printer, f"File refused: {wrong_plate}", "wrong_plate")
             return
         try:
             remote_name = printer_filename(filename or file_path.name)
