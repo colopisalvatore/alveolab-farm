@@ -1344,6 +1344,7 @@ export default {
       rowTooltip: 'Dieses Archiv enthält die genauen AMS-Steckplätze, die der Slicer ausgewählt hat, gespeichert für den Drucker dieses Eintrags. Ein erneuter Druck darauf kann diese Fächer wiederverwenden, statt erneut nach Typ und Farbe zuzuordnen.',
     },
     title: 'Druckwarteschlange',
+    farm: { addJob: 'Job hinzufügen' },
     subtitle: 'Planen und verwalten Sie Ihre Druckaufträge',
     // Print modal
     editQueueItem: 'Warteschlangeneintrag bearbeiten',

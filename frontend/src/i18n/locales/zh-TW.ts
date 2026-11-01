@@ -1344,6 +1344,7 @@ export default {
       rowTooltip: '此封存保留了切片軟體選擇的確切 AMS 槽位，並為此項目的目標印表機儲存。在該印表機上重新列印時，可重複使用這些料盤，而不必再依類型與顏色重新比對。',
     },
     title: '列印佇列',
+    farm: { addJob: '新增工作' },
     subtitle: '排程和管理您的列印任務',
     // Print modal
     editQueueItem: '編輯佇列項目',

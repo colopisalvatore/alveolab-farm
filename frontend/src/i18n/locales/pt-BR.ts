@@ -1344,6 +1344,7 @@ export default {
       rowTooltip: 'Este arquivo mantém os slots AMS exatos escolhidos pelo fatiador, salvos para a impressora deste item. Uma reimpressão nela pode reutilizar esses carretéis em vez de casar novamente por tipo e cor.',
     },
     title: 'Fila de Impressão',
+    farm: { addJob: 'Adicionar trabalho' },
     subtitle: 'Agende e gerencie seus trabalhos de impressão',
     // Print modal
     editQueueItem: 'Editar Item da Fila',

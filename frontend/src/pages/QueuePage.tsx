@@ -80,6 +80,7 @@ import { PrintModal } from '../components/PrintModal';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { QueueStatsBar } from '../components/QueueStatsBar';
+import { FarmStatusGrid } from '../components/FarmStatusGrid';
 import { CompactHistoryRow } from '../components/CompactHistoryRow';
 import { QueueTimelineView } from '../components/QueueTimelineView';
 import { compareQueueOrder } from '../utils/queueOrder';
@@ -2638,6 +2639,10 @@ export function QueuePage() {
         historyCount={historyItems.length}
         t={t}
       />}
+
+      {activeTab === 'queue' && (
+        <FarmStatusGrid printers={printers || []} queueItems={queue || []} t={t} timeFormat={timeFormat} />
+      )}
 
       {/* #1818: Resume-after-failure banner. One row per printer whose queue
           is gated by a prior failed/aborted print. Visible regardless of

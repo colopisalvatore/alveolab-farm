@@ -1344,6 +1344,7 @@ export default {
       rowTooltip: 'Cette archive conserve les emplacements AMS exacts choisis par le slicer, enregistrés pour l\'imprimante de cet élément. Une réimpression dessus peut réutiliser ces bobines au lieu de refaire la correspondance par type et couleur.',
     },
     title: 'File d\'attente',
+    farm: { addJob: 'Ajouter un travail' },
     subtitle: 'Gérez vos travaux d\'impression',
     // Print modal
     editQueueItem: 'Modifier l\'élément',
