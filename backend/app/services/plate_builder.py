@@ -465,6 +465,25 @@ def pack(
 # ---------------------------------------------------------------- writing
 
 
+# Keys of a slicer profile that describe the profile itself, not the machine.
+_PROFILE_META_KEYS = frozenset(
+    {
+        "name",
+        "inherits",
+        "from",
+        "setting_id",
+        "instantiation",
+        "type",
+        "is_custom_defined",
+        "version",
+        "compatible_printers",
+        "compatible_printers_condition",
+        "compatible_prints",
+        "compatible_prints_condition",
+    }
+)
+
+
 def _rel_target(tag: str) -> str:
     """Target of a <Relationship .../> tag, whatever the attribute order, without the leading slash."""
     m = re.search(r'\bTarget="([^"]*)"', tag)
@@ -493,9 +512,10 @@ def build_plate(
     """Lay ``sets`` sets of the given plates out on one plate (None = as many as fit).
 
     ``bed_from`` is a printer profile (e.g. the one the plate will be sliced
-    with): its ``printable_area`` and ``bed_exclude_area`` replace the bed of the
-    project settings, in the layout and in the file. A designer file made for a
-    bigger printer would otherwise be laid out off the target's bed.
+    with): its machine settings, bed included, replace those of the project, in
+    the layout and in the file. A designer file made for a bigger printer would
+    otherwise be laid out off the target's bed, or be re-arranged by the slicer
+    as a cross-printer file.
     """
     if not sources:
         raise PlateBuildError("No source plate given")
@@ -525,8 +545,16 @@ def build_plate(
     if bed_from is not None:
         if not bed_from.get("printable_area"):
             raise PlateBuildError("The printer profile has no printable_area")
-        project["printable_area"] = bed_from["printable_area"]
+        # The whole machine part, not just the bed: the Farm reads the target
+        # printer of a project from its printer_model, and a designer file made
+        # for a dual-nozzle H2C still saying so gets a forced --arrange when
+        # sliced for a single-nozzle printer, which throws the layout away.
+        for key, value in bed_from.items():
+            if key not in _PROFILE_META_KEYS:
+                project[key] = value
         project["bed_exclude_area"] = bed_from.get("bed_exclude_area") or []
+        if isinstance(bed_from.get("name"), str):
+            project["printer_settings_id"] = bed_from["name"]
     area, excluded = bed_of(project)
 
     # One footprint per (source, plate instance); the same object placed twice on

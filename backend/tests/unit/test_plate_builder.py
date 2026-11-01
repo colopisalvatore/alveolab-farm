@@ -330,6 +330,11 @@ def test_plate_name_is_added_when_the_source_plate_has_none():
 def test_bed_from_a_printer_profile_replaces_the_designers_bed():
     big = snowman_like(bed=330)
     cc2 = {
+        "name": "Elegoo Centauri 2 0.4 nozzle",
+        "type": "machine",
+        "inherits": "fdm_machine_common",
+        "printer_model": "Elegoo Centauri 2",
+        "nozzle_diameter": ["0.4"],
         "printable_area": ["0x0", "256x0", "256x256", "0x256"],
         "bed_exclude_area": ["246x0", "256x0", "256x20", "246x20"],
     }
@@ -338,6 +343,12 @@ def test_bed_from_a_printer_profile_replaces_the_designers_bed():
     project = json.loads(_read(result.content)["Metadata/project_settings.config"])
     assert project["printable_area"] == cc2["printable_area"]
     assert project["bed_exclude_area"] == cc2["bed_exclude_area"]
+    # The machine part comes along (the Farm reads the target printer from it),
+    # the profile's own bookkeeping does not.
+    assert project["printer_model"] == "Elegoo Centauri 2"
+    assert project["printer_settings_id"] == "Elegoo Centauri 2 0.4 nozzle"
+    assert project["nozzle_diameter"] == ["0.4"]
+    assert "inherits" not in project and project.get("type") != "machine"
     for b in _boxes(result.content):
         assert b[2] <= 256 - EDGE_MM + 1e-6 and b[3] <= 256 - EDGE_MM + 1e-6
         assert not _overlap(b, (246, 0, 256, 20), gap=EDGE_MM - 1e-6)
