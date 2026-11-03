@@ -161,6 +161,9 @@ async def _build_service(
 
 def _map_service_error(exc: ProviderError) -> HTTPException:
     """Translate provider service exceptions into HTTP responses."""
+    # The access log only records the status code; without this line the
+    # provider's own reason (CAPTCHA, upstream status, S3 refusal) is lost.
+    logger.warning("Model provider error (%s): %s", type(exc).__name__, exc)
     if isinstance(exc, ProviderUrlError):
         return HTTPException(status_code=400, detail=str(exc))
     if isinstance(exc, ProviderAuthError):
@@ -172,7 +175,10 @@ def _map_service_error(exc: ProviderError) -> HTTPException:
     if isinstance(exc, ProviderNotFoundError):
         return HTTPException(status_code=404, detail=str(exc))
     if isinstance(exc, ProviderUnavailableError):
-        return HTTPException(status_code=502, detail=str(exc))
+        # 424, not 502: a reverse proxy such as a Cloudflare tunnel replaces an
+        # origin 502 with its own "Bad gateway" page, so the UI never sees this
+        # detail. 424 (Failed Dependency) still says "an upstream call failed".
+        return HTTPException(status_code=424, detail=str(exc))
     return HTTPException(status_code=500, detail=f"Model provider error: {exc}")
 
 
