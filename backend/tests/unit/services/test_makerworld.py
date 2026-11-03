@@ -369,7 +369,7 @@ class TestGetDownload:
     flow the /makerworld/import route drives. The provider-specific dance
     lives here: the iot-service endpoint needs the *alphanumeric* modelId
     (not the integer design id), the profile falls back in two tiers, and
-    three malformed-upstream shapes must map to UnavailableError (502)."""
+    three malformed-upstream shapes must map to UnavailableError (424)."""
 
     @pytest.fixture
     def service(self):
@@ -451,11 +451,51 @@ class TestGetDownload:
 
     @pytest.mark.asyncio
     async def test_manifest_without_url_is_unavailable(self, service):
+        """No URL from the profile and no instance to fall back to."""
         service.get_design = AsyncMock(return_value=self._design())
         service.get_profile_download = AsyncMock(return_value={"name": "benchy.3mf"})
+        service.get_design_instances = AsyncMock(return_value={"total": 0, "hits": []})
 
         with pytest.raises(MakerWorldUnavailableError, match="download URL"):
             await self._run(service, ProviderResourceRef(source_type="makerworld", external_id="1400373"))
+
+    @pytest.mark.asyncio
+    async def test_empty_profile_url_falls_back_to_the_instance(self, service):
+        """The profile endpoint now answers with ``url: ""``; the instance
+        endpoint for the same profile supplies the signed URL instead."""
+        service.get_design = AsyncMock(
+            return_value=self._design(instances=[{"id": 4028000, "profileId": 298919107, "title": "split"}])
+        )
+        service.get_profile_download = AsyncMock(return_value={"name": "split profile", "url": ""})
+        service.get_instance_download = AsyncMock(
+            return_value={"name": "mrsclaus_split.3mf", "url": "https://makerworld.bblmw.com/m.3mf?exp=1"}
+        )
+
+        info = await self._run(
+            service, ProviderResourceRef(source_type="makerworld", external_id="1400373", sub_id="298919107")
+        )
+
+        service.get_instance_download.assert_awaited_once_with(4028000)
+        assert info.url == "https://makerworld.bblmw.com/m.3mf?exp=1"
+        assert info.suggested_filename == "mrsclaus_split.3mf"
+        assert info.ref.sub_id == "298919107"
+
+    @pytest.mark.asyncio
+    async def test_instance_found_in_the_instances_envelope(self, service):
+        """Design instances without an ``id`` → the envelope supplies it."""
+        service.get_design = AsyncMock(return_value=self._design())
+        service.get_profile_download = AsyncMock(return_value={"url": ""})
+        service.get_design_instances = AsyncMock(
+            return_value={"total": 2, "hits": [{"id": 1, "profileId": 5}, {"id": 4028000, "profileId": 298919107}]}
+        )
+        service.get_instance_download = AsyncMock(return_value=self._manifest())
+
+        info = await self._run(
+            service, ProviderResourceRef(source_type="makerworld", external_id="1400373", sub_id="298919107")
+        )
+
+        service.get_instance_download.assert_awaited_once_with(4028000)
+        assert info.url == self._manifest()["url"]
 
 
 class TestGetProfileDownload:
@@ -508,6 +548,34 @@ class TestGetProfileDownload:
         assert url == "https://api.bambulab.com/v1/iot-service/api/user/profile/1452154"
         assert call.kwargs["headers"]["Authorization"] == "Bearer tok-abc"
         assert call.kwargs["params"] == {"model_id": "US2bb73b106683e5"}
+
+    @pytest.mark.asyncio
+    async def test_instance_download_sends_bearer_and_type(self):
+        """The instance endpoint takes the same bearer and ``type=download``."""
+        svc = self._make_service(auth_token="tok-abc")
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"name": "m.3mf", "url": "https://makerworld.bblmw.com/m.3mf"}
+        svc._client.get.return_value = resp
+
+        manifest = await svc.get_instance_download(4028000)
+
+        call = svc._client.get.call_args
+        url = call.args[0] if call.args else call.kwargs.get("url")
+        assert url == "https://api.bambulab.com/v1/design-service/instance/4028000/f3mf"
+        assert call.kwargs["headers"]["Authorization"] == "Bearer tok-abc"
+        assert call.kwargs["params"] == {"type": "download"}
+        assert manifest["name"] == "m.3mf"
+
+    @pytest.mark.asyncio
+    async def test_instance_not_found_names_the_instance(self):
+        svc = self._make_service()
+        resp = MagicMock()
+        resp.status_code = 404
+        svc._client.get.return_value = resp
+
+        with pytest.raises(MakerWorldNotFoundError, match="instance not found: 4028000"):
+            await svc.get_instance_download(4028000)
 
     @pytest.mark.asyncio
     async def test_maps_401_to_auth_error(self):
