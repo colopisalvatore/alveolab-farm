@@ -1,6 +1,13 @@
 // ALVEOLAB Farm strings, merged into the locale at load (see alveolab/i18n.ts).
 export default {
   farm: {
+    outsideQueue: {
+      label: 'Fuori dalla coda',
+      historyTitle: 'Stampate fuori dalla coda',
+      openPrinter: 'Apri la pagina stampanti',
+      paused: 'In pausa',
+      remaining: 'mancano {{time}}',
+    },
     provider: 'Produttore',
     providerBambu: 'Bambu Lab',
     providerElegoo: 'ELEGOO',

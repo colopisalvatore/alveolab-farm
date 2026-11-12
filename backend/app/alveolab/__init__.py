@@ -19,6 +19,7 @@ def setup(app, api_prefix: str) -> None:
     if not modules_enabled():
         return
 
+    from backend.app.alveolab.outside_queue import router as outside_queue_router
     from backend.app.alveolab.plates.routes import router as plates_router
     from backend.app.alveolab.production.routes import router as production_router
     from backend.app.alveolab.provider_jobs import on_provider_job_event
@@ -28,4 +29,5 @@ def setup(app, api_prefix: str) -> None:
     app.include_router(provider_router, prefix=api_prefix)
     app.include_router(production_router, prefix=api_prefix)
     app.include_router(plates_router, prefix=api_prefix)
+    app.include_router(outside_queue_router, prefix=api_prefix)
     printer_manager.set_provider_job_event_callback(on_provider_job_event)

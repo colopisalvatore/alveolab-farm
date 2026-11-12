@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight, Clock, Layers, Printer as PrinterIcon } from
 import { formatDuration, parseUTCDate } from '../utils/date';
 import { compareQueueOrder, queueLaneKey } from '../utils/queueOrder';
 import { isBusyOnlyWaitingReason } from '../utils/waitingReason';
+import { ExternalPrintBar } from '../alveolab/outside-queue/ExternalPrintBar'; // ALVEOLAB Farm
+import { latestExternalEnd, seedExternalChains, type ExternalBar } from '../alveolab/outside-queue/outsideQueue';
 import type { PrintQueueItem, Printer } from '../api/client';
 import { queueItemThumbnailUrl } from '../utils/queueItemThumbnail';
 import { Button } from './Button';
@@ -21,6 +23,7 @@ const RANGE_MS = RANGE_HOURS * HOUR_MS;
 const MIN_BAR_PX = 32;
 // Lane height for the bar row + label.
 const LANE_BAR_HEIGHT_PX = 40;
+const EMPTY_BARS: ExternalBar[] = [];
 
 interface ScheduleEvent {
   item: PrintQueueItem;
@@ -38,6 +41,8 @@ interface QueueTimelineViewProps {
    *  order depends on it, so without it the timeline drew a queue the
    *  scheduler had no intention of running (#3043). */
   sjfEnabled: boolean;
+  /** ALVEOLAB Farm: prints a printer runs outside the queue (dashed, read-only bars). */
+  externalBars?: ExternalBar[];
   onItemClick: (item: PrintQueueItem) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }
@@ -64,6 +69,7 @@ export function QueueTimelineView({
   printers,
   printerStatuses,
   sjfEnabled,
+  externalBars = EMPTY_BARS,
   onItemClick,
   t,
 }: QueueTimelineViewProps) {
@@ -106,6 +112,7 @@ export function QueueTimelineView({
     const lanesWithActive = new Set<string>();
     // Chain-end timestamp per lane (where the next pending item's bar starts).
     const chainEndByLane = new Map<string, number>();
+    seedExternalChains(externalBars, lanesWithActive, chainEndByLane, nowMs);
 
     for (const item of queueItems) {
       if (item.status === 'printing') {
@@ -173,7 +180,7 @@ export function QueueTimelineView({
       }
     }
     return result;
-  }, [queueItems, printerStatuses, nowMs, sjfEnabled]);
+  }, [queueItems, printerStatuses, externalBars, nowMs, sjfEnabled]);
 
   // Lanes: every printer + every distinct target_model with queue activity
   // + an "unassigned" lane if needed. Printers that have NO events queued
@@ -251,8 +258,9 @@ export function QueueTimelineView({
   const allDoneBy = useMemo(() => {
     let latest = 0;
     for (const ev of events) latest = Math.max(latest, ev.estimatedEnd.getTime());
+    latest = Math.max(latest, latestExternalEnd(externalBars));
     return latest > 0 ? new Date(latest) : null;
-  }, [events]);
+  }, [events, externalBars]);
 
   const trackRef = useRef<HTMLDivElement | null>(null);
 
@@ -319,7 +327,7 @@ export function QueueTimelineView({
           committed (no scheduled_time / no active print to chain off).
           Without this, users see striped lanes with no bars and assume the
           timeline is broken — common confusion from the GHSA-r2qv era. */}
-      {lanes.length > 0 && events.length === 0 && (
+      {lanes.length > 0 && events.length === 0 && externalBars.length === 0 && (
         <div className="mb-4 p-3 rounded-lg border border-bambu-dark-tertiary bg-bambu-dark/40 text-xs text-bambu-gray">
           {t('queue.timeline.nothingCommitted')}
         </div>
@@ -354,6 +362,7 @@ export function QueueTimelineView({
           <div ref={trackRef} className="relative">
             {lanes.map((lane) => {
               const laneEvents = eventsByLane.get(lane.key) ?? [];
+              const external = lane.printerId != null ? externalBars.find((b) => b.printerId === lane.printerId) : undefined;
               return (
                 <div key={lane.key} className="flex border-b border-bambu-dark-tertiary/40 last:border-b-0">
                   <div className="w-32 sm:w-40 shrink-0 px-3 py-3 border-r border-bambu-dark-tertiary flex items-center gap-2">
@@ -389,6 +398,16 @@ export function QueueTimelineView({
                       }}
                       aria-hidden
                     />
+
+                    {external && (
+                      <ExternalPrintBar
+                        bar={external}
+                        rangeStartMs={rangeStartMs}
+                        rangeEndMs={rangeEndMs}
+                        minBarPx={MIN_BAR_PX}
+                        barHeightPx={LANE_BAR_HEIGHT_PX}
+                      />
+                    )}
 
                     {/* Job bars */}
                     {laneEvents.map((ev) => {

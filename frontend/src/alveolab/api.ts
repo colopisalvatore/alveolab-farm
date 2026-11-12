@@ -76,7 +76,32 @@ export interface ElegooDiscoveredPrinter {
   provider: 'elegoo';
 }
 
+/** A finished print no queue row owns (slicer, touchscreen, reprint button). */
+export interface OutsideQueuePrint {
+  archive_id: number;
+  printer_id: number | null;
+  printer_name: string | null;
+  name: string;
+  /** Archive status: completed, failed, cancelled or aborted. */
+  status: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string | null;
+  print_time_seconds: number | null;
+  filament_used_grams: number | null;
+  filament_type: string | null;
+  filament_color: string | null;
+  failure_reason: string | null;
+  has_thumbnail: boolean;
+}
+
 export const farmApi = {
+  getOutsideQueuePrints: (printerId?: number, limit = 100) => {
+    const params = new URLSearchParams();
+    if (printerId) params.set('printer_id', String(printerId));
+    params.set('limit', String(limit));
+    return request<OutsideQueuePrint[]>(`/alveolab/queue/outside-prints?${params}`);
+  },
   getPrinterCapabilities: (id: number) =>
     request<PrinterCapabilities>(`/printer-providers/printers/${id}/capabilities`),
   getPrinterTelemetry: (id: number) =>

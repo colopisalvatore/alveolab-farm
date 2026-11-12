@@ -51,5 +51,17 @@ Code: `alveolab/plates/{builder,schemas,routes}.py`: **`POST /api/v1/alveolab/li
 | 14 | `api/routes/archives.py` | `slice_archive` applies `with_printer_bed` |
 | 15 | `schemas/slicer.py` | `SliceRequest.printer_id` |
 
+## Module: prints outside the queue (live card, timeline bar, finished list)
+
+Code: backend `alveolab/outside_queue.py` (`GET /api/v1/alveolab/queue/outside-prints`, finished prints
+whose archive no queue row owns); frontend `alveolab/outside-queue/*` (live prints are read from the printer
+statuses, no backend). Upstream history is server-paged since 1.3.0, so finished outside prints are a
+separate list under it, not merged into it.
+
+| # | File | Hook |
+|---|------|------|
+| 16 | `pages/QueuePage.tsx` | `useOutsideQueue(...)`; its count added to the Queue tab and stats; `OutsideQueuePrintCard`s in "Currently printing"; empty state waits for it; `externalBars` passed to the timeline; `<OutsideQueueHistory/>` under `HistorySection` |
+| 17 | `components/QueueTimelineView.tsx` | `externalBars` prop: seeds each lane's chain (`seedExternalChains`), counts in "all done by" and the empty notice, renders `ExternalPrintBar` |
+
 ## Not yet moved (still on the fork, later modules)
-outside-queue + timeline (D), UI/branding (F), MakerWorld 424 + log (E).
+UI/branding (F), MakerWorld 424 + log (E).
