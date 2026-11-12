@@ -19,9 +19,11 @@ def setup(app, api_prefix: str) -> None:
     if not modules_enabled():
         return
 
+    from backend.app.alveolab.production.routes import router as production_router
     from backend.app.alveolab.provider_jobs import on_provider_job_event
     from backend.app.alveolab.routes import router as provider_router
     from backend.app.services.printer_manager import printer_manager
 
     app.include_router(provider_router, prefix=api_prefix)
+    app.include_router(production_router, prefix=api_prefix)
     printer_manager.set_provider_job_event_callback(on_provider_job_event)

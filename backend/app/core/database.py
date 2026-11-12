@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from backend.app.alveolab import migrations as alveolab_migrations
+from backend.app.alveolab import migrations as alveolab_migrations, models as alveolab_models
 from backend.app.core.config import settings
 from backend.app.core.db_dialect import is_sqlite
 
@@ -385,6 +385,7 @@ def load_all_models():
 
     for module in pkgutil.iter_modules(backend.app.models.__path__):
         importlib.import_module(f"backend.app.models.{module.name}")
+    alveolab_models.load()  # ALVEOLAB Farm tables
     return Base.metadata
 
 
@@ -724,6 +725,8 @@ async def init_db():
         user_totp,
         virtual_printer,
     )
+
+    alveolab_models.load()  # ALVEOLAB Farm tables
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

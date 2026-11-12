@@ -16,7 +16,7 @@ Code: `alveolab/printer_providers/` (base, bambu capabilities, `elegoo/*`), `alv
 | # | File | Hook |
 |---|------|------|
 | 1 | `main.py` | import `alveolab` + one line `alveolab.setup(app, prefix)` (mounts router, registers job-event callback) |
-| 2 | `core/database.py` | import + one line `alveolab_migrations.run(conn, _safe_execute)` |
+| 2 | `core/database.py` | imports + `alveolab_migrations.run(conn, _safe_execute)` + `alveolab_models.load()` (in `init_db` and `load_all_models`, so create_all sees our tables) |
 | 3 | `models/printer.py` | columns `provider` ("bambu" default), `bed_type` |
 | 4 | `schemas/printer.py` | `provider` field, serial case kept for non-Bambu, access code optional for non-Bambu, `bed_type` + `BED_TYPES` |
 | 5 | `services/printer_manager.py` | `_provider_clients`/`_providers` maps; `connect_printer` branches to `_connect_provider_printer`; `disconnect_*`, `get_status`, `get_all_statuses`, `is_connected` also see provider clients; `get_provider`, `get_provider_client`, `get_capabilities`, `set_provider_job_event_callback`. `get_client()` stays Bambu-only on purpose |
@@ -34,5 +34,11 @@ add-printer modal, print modal, CANVAS panel; `locales/{en,it}.ts` = our strings
 | 11 | `pages/PrintersPage.tsx` | `PrinterCard`: `usePrinterProvider`, Bambu-only sections gated on `printerProvider.isBambu`, `ProviderJobControls`, `CanvasPanel`, `ProviderFaultsBadge`, `ElegooPrintModal`; `AddPrinterModal`: `ProviderPicker` + `ElegooAddPrinterModal`; connect-error reason toast; bulk actions skip non-Bambu |
 | 12 | `KProfilesView`, `PrintModal/index`, `RunWithPipelineModal`, `VirtualPrinterAddDialog`, `VirtualPrinterCard`, `spoolbuddy/AssignToAmsModal`, `CamWallPage` | printers query gets `select: bambuPrintersOnly` (3 lines each) |
 
+## Module: production (recipes, stock, demand, plates to print)
+
+Code: `alveolab/production/{models,schemas,services,routes}.py`, tables `production_*`.
+API `/api/v1/production/*` unchanged (Jarvis uses it). Mounted by `alveolab.setup`; tables via
+`alveolab/models.py` (hook 2). **No other hook.**
+
 ## Not yet moved (still on the fork, later modules)
-production (B), plates (C), outside-queue + timeline (D), UI/branding (F), MakerWorld 424 + log (E).
+plates (C), outside-queue + timeline (D), UI/branding (F), MakerWorld 424 + log (E).
