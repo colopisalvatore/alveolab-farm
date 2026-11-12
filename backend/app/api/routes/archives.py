@@ -18,6 +18,7 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
+from backend.app.alveolab import library_hooks as alveolab_library
 from backend.app.core import database
 from backend.app.core.auth import (
     ApiKeyActor,
@@ -5731,6 +5732,8 @@ async def slice_archive(
     )  # SEC-PATH-OK: src_relative is archive.source_3mf_path from DB, set by _resolve_source_3mf_path which already does resolve+relative_to containment
     if not src_path.exists():
         raise HTTPException(status_code=404, detail="Archive source file missing on disk")
+
+    request = await alveolab_library.with_printer_bed(db, request)  # ALVEOLAB Farm: plate mounted on the printer
 
     raw_filename = archive.filename or src_path.name
     src_lower = raw_filename.lower()

@@ -22,6 +22,7 @@ from sqlalchemy import delete, distinct, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend.app.alveolab import library_hooks as alveolab_library
 from backend.app.api.routes.cloud import resolve_api_key_cloud_owner
 from backend.app.api.routes.library_variants import normalize_model_name, resolve_variant_model
 from backend.app.api.routes.print_queue import (
@@ -360,6 +361,8 @@ def validate_print_file_upload(filename: str, content: bytes) -> None:
     lower_filename = filename.lower()
     is_3mf_upload = lower_filename.endswith(".3mf")
     is_raw_gcode_upload = lower_filename.endswith(".gcode") and not lower_filename.endswith(".gcode.3mf")
+    if is_raw_gcode_upload and alveolab_library.accepts_raw_gcode(content):
+        return  # ALVEOLAB Farm: G-code sliced for a Centauri 2
 
     if is_raw_gcode_upload:
         raise HTTPException(
@@ -459,7 +462,9 @@ def _unique_external_name(ext_dir: Path, filename: str) -> str:
     return candidate
 
 
-def _resolve_slice_destination(target_folder: LibraryFolder | None, out_filename: str) -> tuple[Path, bool, str | None]:
+def _resolve_slice_destination(
+    target_folder: LibraryFolder | None, out_filename: str, managed_suffix: str = ".gcode.3mf"
+) -> tuple[Path, bool, str | None]:
     """Resolve where a slice result should be written.
 
     Returns ``(path, is_external, fallback_reason)``. ``fallback_reason`` is
@@ -481,18 +486,18 @@ def _resolve_slice_destination(target_folder: LibraryFolder | None, out_filename
     with a reason attached rather than discarding the slice.
     """
     if target_folder is None or not target_folder.is_external:
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, None
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, None
 
     if target_folder.external_readonly:
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_readonly"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_readonly"
     if not target_folder.external_path:
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_no_path"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_no_path"
 
     ext_dir = Path(target_folder.external_path)
     if not ext_dir.exists() or not ext_dir.is_dir():
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_unreachable"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_unreachable"
     if not os.access(ext_dir, os.W_OK):
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_not_writable"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_not_writable"
 
     try:
         dest = safe_join_under(ext_dir, _unique_external_name(ext_dir, out_filename), http=False)
@@ -500,7 +505,7 @@ def _resolve_slice_destination(target_folder: LibraryFolder | None, out_filename
         # The source filename reached us from a 3MF on disk, so this is
         # defensive rather than expected -- but a name that escapes the mount
         # must land in managed storage, never outside it.
-        return get_library_files_dir() / f"{uuid.uuid4().hex}.gcode.3mf", False, "external_invalid_name"
+        return get_library_files_dir() / f"{uuid.uuid4().hex}{managed_suffix}", False, "external_invalid_name"
     return dest, True, None
 
 
@@ -2628,6 +2633,7 @@ async def upload_file(
                     thumbnail_path = str(thumb_path)
             except Exception as e:
                 logger.warning("Failed to extract gcode thumbnail: %s", e)
+            metadata.update(alveolab_library.sliced_for_metadata(file_path))  # ALVEOLAB Farm
 
         elif ext.lower() in IMAGE_EXTENSIONS:
             # For image files, create a thumbnail from the image itself
@@ -5040,6 +5046,21 @@ async def slice_and_persist(
     # a large plate renders for seconds, and on the event loop that stalled
     # every request and printer connection for as long (#3135).
     result = result._replace(content=await asyncio.to_thread(inject_plate_thumbnails_if_missing, result.content))
+
+    # ALVEOLAB Farm: a slice made for a Centauri 2 is kept as plain G-code.
+    cc2_response = await alveolab_library.persist_cc2_slice(
+        db,
+        result=result,
+        base_name=safe_base,
+        target_folder=target_folder,
+        folder_id=folder_id,
+        used_embedded_settings=used_embedded_settings,
+        extra_metadata=extra_metadata,
+        current_user_id=current_user_id,
+    )
+    if cc2_response is not None:
+        return cc2_response
+
     out_path.write_bytes(result.content)
 
     # Extract thumbnail from the produced 3MF so the library card shows a
@@ -5388,6 +5409,8 @@ async def slice_library_file(
         )
     if not (src_lower.endswith(".stl") or src_lower.endswith(".3mf")):
         raise HTTPException(status_code=400, detail="Source file must be STL or 3MF")
+
+    request = await alveolab_library.with_printer_bed(db, request)  # ALVEOLAB Farm: plate mounted on the printer
 
     src_path = Path(app_settings.base_dir) / lib_file.file_path
     if not src_path.exists():

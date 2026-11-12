@@ -40,5 +40,16 @@ Code: `alveolab/production/{models,schemas,services,routes}.py`, tables `product
 API `/api/v1/production/*` unchanged (Jarvis uses it). Mounted by `alveolab.setup`; tables via
 `alveolab/models.py` (hook 2). **No other hook.**
 
+## Module: plates (build-plate) and G-code slicing for the Centauri 2
+
+Code: `alveolab/plates/{builder,schemas,routes}.py`: **`POST /api/v1/alveolab/library/build-plate`**
+(was `/library/files/build-plate`; Jarvis updated), `alveolab/library_hooks.py`.
+
+| # | File | Hook |
+|---|------|------|
+| 13 | `api/routes/library.py` | `validate_print_file_upload` accepts raw G-code sliced for a Centauri; `upload_file` adds `sliced_for_model` of an uploaded G-code; `slice_and_persist` asks `persist_cc2_slice` (plain `.gcode` instead of 3MF); `slice_library_file` applies `with_printer_bed`; `_resolve_slice_destination` takes `managed_suffix` |
+| 14 | `api/routes/archives.py` | `slice_archive` applies `with_printer_bed` |
+| 15 | `schemas/slicer.py` | `SliceRequest.printer_id` |
+
 ## Not yet moved (still on the fork, later modules)
-plates (C), outside-queue + timeline (D), UI/branding (F), MakerWorld 424 + log (E).
+outside-queue + timeline (D), UI/branding (F), MakerWorld 424 + log (E).
