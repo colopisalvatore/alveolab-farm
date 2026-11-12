@@ -2,6 +2,7 @@ import type { KProfileWriteResult } from '../utils/kprofileWrite';
 import type { BambuCatalogColor } from '../utils/colors';
 import type { ArchivePlatesResponse, LibraryFilePlatesResponse } from '../types/plates';
 import { batched, byField, byId } from './batch';
+import type { PrinterProviderId } from '../alveolab/api'; // ALVEOLAB Farm
 
 const API_BASE = '/api/v1';
 
@@ -147,7 +148,7 @@ async function postForBlob(endpoint: string, data: unknown, signal?: AbortSignal
   return response.blob();
 }
 
-async function request<T>(
+export async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
@@ -491,6 +492,8 @@ export interface Printer {
   plate_detection_roi?: PlateDetectionROI;  // ROI for plate detection
   wear_cost_per_hour: number | null;  // Wear cost per printing hour (#694)
   wled_config: WLEDConfig | null;
+  provider?: PrinterProviderId;  // ALVEOLAB Farm: protocol family, absent = bambu
+  bed_type?: string | null;  // ALVEOLAB Farm: build plate mounted (Centauri plate check)
   created_at: string;
   updated_at: string;
 }
@@ -810,6 +813,7 @@ export interface PrinterCreate {
   model?: string;
   location?: string | null;
   auto_archive?: boolean;
+  provider?: PrinterProviderId;  // ALVEOLAB Farm; omitted = bambu
   // Maintenance Mode flag (#1476). Backend already gates MQTT, queue dispatch,
   // scheduler, metrics and the print picker on this; toggling via PATCH
   // /printers/{id} disconnects or reconnects MQTT accordingly.

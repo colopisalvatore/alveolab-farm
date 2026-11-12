@@ -3,6 +3,7 @@ import { AlertCircle, AlertTriangle, Layers, Loader2, Pencil, Printer, ThumbsUp,
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CostCenterSummary, PrintQueueItemCreate, PrintQueueItemUpdate, SlotMaterial } from '../../api/client';
+import { bambuPrintersOnly } from '../../alveolab/printer-providers/capabilities';
 import { api } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent } from '../Card';
@@ -427,6 +428,8 @@ export function PrintModal({
   const { data: printers, isLoading: loadingPrinters } = useQuery({
     queryKey: ['printers'],
     queryFn: api.getPrinters,
+    // ALVEOLAB Farm: Bambu-only flow, other providers are not offered here.
+    select: bambuPrintersOnly,
   });
 
   const { data: myCostCenters, isLoading: loadingCostCenters } = useQuery({

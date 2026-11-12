@@ -17,6 +17,9 @@ class Printer(Base):
     ip_address: Mapped[str] = mapped_column(String(253))
     access_code: Mapped[str] = mapped_column(String(20))
     model: Mapped[str | None] = mapped_column(String(50))
+    # Protocol family (ALVEOLAB Farm provider layer): "bambu" | "elegoo".
+    # Every row that predates the column is a Bambu printer.
+    provider: Mapped[str] = mapped_column(String(20), default="bambu", server_default="bambu")
     location: Mapped[str | None] = mapped_column(String(100))  # Group/location name
     nozzle_count: Mapped[int] = mapped_column(default=1)  # 1 or 2, auto-detected from MQTT
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -56,6 +59,12 @@ class Printer(Base):
     awaiting_plate_clear: Mapped[bool] = mapped_column(Boolean, default=False)
     # Optional per-printer WLED preset mapping. WLED owns all visual effects.
     wled_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # ALVEOLAB Farm: the build plate mounted now, named as the slicer names it
+    # ("Textured PEI Plate", "Cool Plate"...). Set by hand when the plate is
+    # changed or flipped; a G-code sliced for another plate is refused, since
+    # the bed temperature comes with it (1/11/2026: PLA at 35 C on textured PEI
+    # came off the bed). None = not known, nothing is checked.
+    bed_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

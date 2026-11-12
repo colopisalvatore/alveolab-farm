@@ -20,6 +20,7 @@ import {
   StickyNote,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
+import { bambuPrintersOnly } from '../alveolab/printer-providers/capabilities';
 import type { KProfile, KProfileCreate, KProfileDelete, Permission } from '../api/client';
 import {
   buildFilamentPresetOptions,
@@ -851,6 +852,8 @@ export function KProfilesView() {
   const { data: printers, isLoading: printersLoading } = useQuery({
     queryKey: ['printers'],
     queryFn: api.getPrinters,
+    // ALVEOLAB Farm: Bambu-only flow, other providers are not offered here.
+    select: bambuPrintersOnly,
   });
 
   // Get K-profiles for selected printer (filtered by nozzle diameter)

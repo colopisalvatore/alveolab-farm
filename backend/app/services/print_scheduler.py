@@ -19,6 +19,9 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend.app.alveolab import dispatch as alveolab_dispatch
+from backend.app.alveolab.hooks import cannot_take_queue_jobs, is_provider_printer
+from backend.app.alveolab.printer_providers.base import PrinterProvider, parse_provider
 from backend.app.core.config import settings
 from backend.app.core.database import async_session, run_with_retry
 from backend.app.core.printer_scope import ALL_PRINTERS, PrinterScope, resolve_user_id_printer_scope
@@ -1583,6 +1586,14 @@ class PrintScheduler:
                     if now - since < _STRANDED_PRINTING_GRACE_SECONDS:
                         continue
 
+                    if status == "cancelled" and is_provider_printer(printer_id):
+                        # ALVEOLAB Farm: a provider printer's end is handled by
+                        # provider_jobs; reaching here means it was not seen.
+                        # Idle proves nothing about how the print went.
+                        from backend.app.alveolab.provider_jobs import OUTCOME_NOT_OBSERVED
+
+                        status = "failed"
+                        item.error_message = OUTCOME_NOT_OBSERVED
                     item.status = status
                     item.completed_at = datetime.now(timezone.utc)
                     closed = True
@@ -2255,6 +2266,15 @@ class PrintScheduler:
                                 f"Offline, no Auto On smart plug: {printer_label(item.printer_id)}",
                             )
                             continue
+
+                    if cannot_take_queue_jobs(item.printer_id):
+                        await hold_for_printer(
+                            item,
+                            item.printer_id,
+                            "provider does not support queue dispatch",
+                            f"Not supported: {printer_label(item.printer_id)} cannot take queue jobs yet",
+                        )
+                        continue
 
                     # Check if printer is idle (busy with another print)
                     if not printer_idle:
@@ -4023,6 +4043,8 @@ class PrintScheduler:
         the data to judge, so dispatch is only ever blocked on a positive
         finding.
         """
+        if is_provider_printer(printer_id):
+            return None  # ALVEOLAB Farm: no Bambu AMS; the CANVAS slot_map is built at dispatch (elegoo/slots.py)
         stored_mapping: list | None = None
         if item.ams_mapping:
             try:
@@ -5320,6 +5342,10 @@ class PrintScheduler:
         """Check if a printer is connected and idle."""
         if not printer_manager.is_connected(printer_id):
             logger.debug("Printer %d: not connected", printer_id)
+            return False
+
+        if cannot_take_queue_jobs(printer_id):
+            logger.debug("Printer %d: provider does not support queue dispatch", printer_id)
             return False
 
         state = printer_manager.get_status(printer_id)
@@ -8633,6 +8659,8 @@ class PrintScheduler:
         since been swapped to one with enough material clears the flag here
         so the next scheduler tick dispatches it.
         """
+        if item.printer_id is not None and is_provider_printer(item.printer_id):
+            return False  # ALVEOLAB Farm: spool tracking is per Bambu AMS tray (CANVAS is M5)
         # User has explicitly acknowledged the deficit ("Print Anyway") —
         # don't re-flag, don't even compute. Without this short-circuit the
         # scheduler bounces between "user said anyway" (route clears
@@ -9383,6 +9411,13 @@ class PrintScheduler:
                 return
             logger.error("Queue item %s: File not found: %s", item.id, file_path)
             await self._power_off_if_needed(db, item)
+            return
+
+        # ALVEOLAB Farm (M4): a non-Bambu printer has its own transfer and start.
+        # Nothing below applies to it: preheat, G-code injection, FTPS upload,
+        # the Bambu project_file command and the watchdog that re-queues a job.
+        if parse_provider(getattr(printer, "provider", None)) is not PrinterProvider.BAMBU:
+            await alveolab_dispatch.start_print(self, db, item, printer, archive, file_path, filename)
             return
 
         # Nozzle-diameter mismatch guard (#1899). A file sliced for one nozzle

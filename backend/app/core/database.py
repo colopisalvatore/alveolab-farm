@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
+from backend.app.alveolab import migrations as alveolab_migrations
 from backend.app.core.config import settings
 from backend.app.core.db_dialect import is_sqlite
 
@@ -4191,6 +4192,9 @@ async def _run_migrations(conn):
 
     # Migration: Add awaiting_plate_clear column to printers (#961)
     await _safe_execute(conn, "ALTER TABLE printers ADD COLUMN awaiting_plate_clear BOOLEAN DEFAULT FALSE NOT NULL")
+
+    # ALVEOLAB Farm modules (see ALVEOLAB_HOOKS.md)
+    await alveolab_migrations.run(conn, _safe_execute)
 
     # Migration: Add REST/Webhook smart plug fields
     await _safe_execute(conn, "ALTER TABLE smart_plugs ADD COLUMN rest_on_url VARCHAR(500)")

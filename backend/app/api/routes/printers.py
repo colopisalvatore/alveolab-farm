@@ -12,6 +12,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.background import BackgroundTask
 
+from backend.app.alveolab import hooks as alveolab_hooks
 from backend.app.core import database
 from backend.app.core.auth import (
     RequestPrinterScope,
@@ -208,25 +209,30 @@ async def create_printer(
     if result.scalar_one_or_none():
         raise HTTPException(400, "Printer with this serial number already exists")
 
-    test_result = await printer_manager.test_connection(
-        ip_address=printer_data.ip_address,
-        serial_number=printer_data.serial_number,
-        access_code=printer_data.access_code,
-    )
+    # ALVEOLAB Farm: a non-Bambu printer is probed by its own provider.
+    test_result = await alveolab_hooks.probe_new_printer(printer_data)
+    if test_result is None:
+        test_result = await printer_manager.test_connection(
+            ip_address=printer_data.ip_address,
+            serial_number=printer_data.serial_number,
+            access_code=printer_data.access_code,
+        )
     if not test_result.get("success"):
         # The frontend renders the user-facing message via i18n on `code`;
         # `message` is an English fallback for non-UI clients (curl / scripts).
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "printer_connection_failed",
-                "message": (
-                    "Could not connect to the printer. Verify IP address, serial number, "
-                    "and access code, and confirm LAN-only mode is enabled. "
-                    "The printer was not added."
-                ),
-            },
-        )
+        detail = {
+            "code": "printer_connection_failed",
+            "message": (
+                "Could not connect to the printer. Verify IP address, serial number, "
+                "and access code, and confirm LAN-only mode is enabled. "
+                "The printer was not added."
+            ),
+        }
+        if test_result.get("reason"):
+            # ALVEOLAB Farm: ELEGOO probe tells auth_failed / register_timeout
+            # (LAN Only Mode off) / too_many_clients / unreachable apart.
+            detail["reason"] = test_result["reason"]
+        raise HTTPException(status_code=400, detail=detail)
 
     printer = Printer(**printer_data.model_dump())
     db.add(printer)
@@ -1260,6 +1266,12 @@ async def get_printer_cover(
         printer = result.scalar_one_or_none()
     if not printer:
         raise HTTPException(404, "Printer not found")
+
+    # ALVEOLAB Farm: the cover comes from the 3MF on a Bambu printer's FTP. A
+    # non-Bambu printer has no FTP (the Centauri 2 refuses the connection), so
+    # there is nothing to try.
+    if (printer.provider or "bambu") != "bambu":
+        raise HTTPException(404, "No cover for this printer")
 
     state = printer_manager.get_status(printer_id)
     if not state:
@@ -3673,6 +3685,10 @@ async def stop_print(
     if not printer:
         raise HTTPException(404, "Printer not found")
 
+    provider_result = await alveolab_hooks.stop_print(printer_id)
+    if provider_result is not None:
+        return provider_result
+
     client = printer_manager.get_client(printer_id)
     if not client:
         raise HTTPException(400, "Printer not connected")
@@ -3754,6 +3770,10 @@ async def pause_print(
     if not printer:
         raise HTTPException(404, "Printer not found")
 
+    provider_result = await alveolab_hooks.provider_job_command(printer_id, "pause")
+    if provider_result is not None:
+        return provider_result
+
     client = printer_manager.get_client(printer_id)
     if not client:
         raise HTTPException(400, "Printer not connected")
@@ -3776,6 +3796,10 @@ async def resume_print(
     printer = result.scalar_one_or_none()
     if not printer:
         raise HTTPException(404, "Printer not found")
+
+    provider_result = await alveolab_hooks.provider_job_command(printer_id, "resume")
+    if provider_result is not None:
+        return provider_result
 
     client = printer_manager.get_client(printer_id)
     if not client:

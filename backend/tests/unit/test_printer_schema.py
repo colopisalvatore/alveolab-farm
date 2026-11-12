@@ -82,3 +82,26 @@ def test_wled_url_uses_lan_service_safety_policy(url):
 def test_wled_finished_timeout_is_bounded():
     with pytest.raises(ValidationError):
         WLEDConfig(finished_timeout_seconds=86401)
+
+
+# ALVEOLAB Farm: provider-specific rules.
+
+
+def test_elegoo_serial_case_preserved():
+    """CC2 topics use the serial exactly as discovery reports it."""
+    printer = PrinterCreate(name="CC2", serial_number=" cc2Serial ", ip_address="192.168.1.60", provider="elegoo")
+    assert printer.serial_number == "cc2Serial"
+
+
+def test_elegoo_access_code_optional():
+    assert PrinterCreate(name="CC2", serial_number="X", ip_address="192.168.1.60", provider="elegoo").access_code == ""
+
+
+def test_bambu_access_code_required():
+    with pytest.raises(ValidationError):
+        PrinterCreate(name="P1S", serial_number="X", ip_address="192.168.1.60")
+
+
+def test_unknown_provider_rejected():
+    with pytest.raises(ValidationError):
+        PrinterCreate(name="X", serial_number="X", ip_address="192.168.1.60", access_code="1", provider="prusa")

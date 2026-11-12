@@ -203,6 +203,16 @@ import { ams3hDryerGridColumns, ams3hSlotGridPlacement, amsUnitSlotCount, isAms3
 import { RACK_SLOT_COUNT, externalHotend, externalSlotIndex, isExternalTray, layoutAmsType, locateTray, trayLayoutOf } from '../utils/trayIds';
 import { MAX_CHAMBER_TEMP_C, getPrinterImage, getWifiStrength, filterCompatibleQueueItems, isPrinterCurrentlyDispatchable, IDLE_PRINTER_STATES } from '../utils/printer';
 import { FilamentSlotCircle } from '../components/FilamentSlotCircle';
+// ALVEOLAB Farm: multi-provider card (Bambu unchanged, others by capability)
+import { usePrinterProvider } from '../alveolab/printer-providers/usePrinterProvider';
+import { Capability, isBambuPrinter } from '../alveolab/printer-providers/capabilities';
+import { CanvasPanel } from '../alveolab/printer-providers/CanvasPanel';
+import { ProviderFaultsBadge } from '../alveolab/printer-providers/ProviderFaultsBadge';
+import { ProviderJobControls } from '../alveolab/printer-providers/ProviderJobControls';
+import { ElegooPrintModal } from '../alveolab/printer-providers/ElegooPrintModal';
+import { ProviderPicker } from '../alveolab/printer-providers/ProviderPicker';
+import { ElegooAddPrinterModal } from '../alveolab/printer-providers/ElegooAddPrinterModal';
+import type { PrinterProviderId } from '../alveolab/api';
 import { Collapsible } from '../components/Collapsible';
 import { ConnectionDiagnosticModal, DiagnosticChecklist } from '../components/ConnectionDiagnostic';
 import { getColorName, parseFilamentColor, isLightColor } from '../utils/colors';
@@ -2174,6 +2184,7 @@ function PrinterCard({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const printerProvider = usePrinterProvider(printer);
   const { hasPermission, canModify, authEnabled, isAdmin } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -2202,6 +2213,7 @@ function PrinterCard({
     });
   }, [printer.id]);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [showProviderPrint, setShowProviderPrint] = useState(false);
   const [showPauseConfirm, setShowPauseConfirm] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState<number | null>(null);
   const [showAirductMenu, setShowAirductMenu] = useState<number | null>(null);
@@ -2351,7 +2363,8 @@ function PrinterCard({
     queryFn: () => firmwareApi.checkPrinterUpdate(printer.id),
     staleTime: 5 * 60 * 1000,
     refetchInterval: 5 * 60 * 1000,
-    enabled: checkPrinterFirmware && hasPermission('firmware:read'),
+    // Bambu firmware catalogue only; other providers show the reported version.
+    enabled: checkPrinterFirmware && hasPermission('firmware:read') && printerProvider.isBambu,
   });
 
   // Collect unique tray_info_idx values for cloud filament info lookup
@@ -3581,7 +3594,10 @@ function PrinterCard({
   // used to check — so someone holding that but neither of these had the file
   // uploaded and then rejected by the queue, leaving it stranded. The Print
   // button below has always checked this pair.
-  const canDrop = hasPermission('library:upload') && hasPermission('queue:create');
+  // The upload-and-print flow and the print dialog are Bambu flows (FTPS, AMS);
+  // a non-Bambu printer prints from its own controls (ProviderJobControls).
+  const providerCanDispatch = printerProvider.isBambu && printerProvider.can(Capability.QUEUE_DISPATCH);
+  const canDrop = providerCanDispatch && hasPermission('library:upload') && hasPermission('queue:create');
 
   // Drives the wording alone. Shared with the PrintModal so the card's promise
   // and the modal's own "will start later" toast cannot disagree.
@@ -3862,6 +3878,8 @@ function PrinterCard({
             <RefreshCw className="w-[var(--pc-i4,1rem)] h-[var(--pc-i4,1rem)]" />
             {t('printers.reconnect')}
           </button>
+          {/* ALVEOLAB Farm: refresh, MQTT log and diagnostic speak the Bambu protocol. */}
+          {printerProvider.isBambu && (<>
           <button
             className="w-full px-4 py-2 text-left text-sm hover:bg-bambu-dark-tertiary flex items-center gap-2 disabled:opacity-50"
             disabled={forceRefreshMutation.isPending}
@@ -3893,6 +3911,7 @@ function PrinterCard({
             <Stethoscope className="w-[var(--pc-i4,1rem)] h-[var(--pc-i4,1rem)]" />
             {t('diagnostic.runButton')}
           </button>
+          </>)}
           <button
             className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${
               hasPermission('printers:delete')
@@ -3966,9 +3985,11 @@ function PrinterCard({
               <>
                 <X className="w-8 h-8 mx-auto mb-2 text-red-600 dark:text-red-400" />
                 <p className="text-sm font-medium text-red-700 dark:text-red-400">
-                  {!hasPermission('library:upload')
-                    ? t('fileManager.noPermissionUpload')
-                    : t('fileManager.noPermissionAddToQueue')}
+                  {!providerCanDispatch
+                    ? t('farm.printNotAvailable')
+                    : !hasPermission('library:upload')
+                      ? t('fileManager.noPermissionUpload')
+                      : t('fileManager.noPermissionAddToQueue')}
                 </p>
               </>
             )}
@@ -4092,7 +4113,7 @@ function PrinterCard({
                 </span>
               )}
               {/* Run connection diagnostic — offered when the printer is offline, NOT in maintenance */}
-              {printer.is_active !== false && !status?.connected && (
+              {printer.is_active !== false && !status?.connected && printerProvider.isBambu && (
                 <button
                   onClick={() => setShowDiagnostic(true)}
                   className="flex items-center gap-1 px-2 py-1 rounded-full text-xs cursor-pointer bg-bambu-dark-tertiary text-bambu-gray hover:text-white transition-colors"
@@ -4132,8 +4153,12 @@ function PrinterCard({
                   {wifiSignal}dBm
                 </span>
               )}
-              {/* HMS Status Indicator */}
-              {status?.connected && (() => {
+              {/* ALVEOLAB Farm: faults reported by a non-Bambu printer */}
+              {status?.connected && !printerProvider.isBambu && (
+                <ProviderFaultsBadge faults={printerProvider.telemetry?.faults} />
+              )}
+              {/* HMS Status Indicator (Bambu HMS codes only) */}
+              {status?.connected && printerProvider.isBambu && (() => {
                 const knownErrors = status.hms_errors ? filterKnownHMSErrors(status.hms_errors) : [];
                 return (
                   <button
@@ -4987,8 +5012,24 @@ function PrinterCard({
 
             {viewMode === 'expanded' && showClearPlateButton && expandedClearPlateButton}
 
+            {/* ALVEOLAB Farm: non-Bambu printers get only the job controls their provider declares (M4). */}
+            {viewMode === 'expanded' && !printerProvider.isBambu && (
+              <ProviderJobControls
+                state={status.state}
+                connected={status.connected}
+                can={printerProvider.can}
+                canControl={hasPermission('printers:control')}
+                canQueue={hasPermission('queue:create')}
+                busy={stopPrintMutation.isPending || pausePrintMutation.isPending || resumePrintMutation.isPending}
+                onPause={() => setShowPauseConfirm(true)}
+                onResume={() => setShowResumeConfirm(true)}
+                onStop={() => setShowStopConfirm(true)}
+                onPrint={() => setShowProviderPrint(true)}
+              />
+            )}
+
             {/* Controls */}
-            {viewMode === 'expanded' && (() => {
+            {viewMode === 'expanded' && printerProvider.isBambu && (() => {
               // Determine print state for control buttons
               const isRunning = status.state === 'RUNNING';
               const isPaused = status.state === 'PAUSE';
@@ -5387,8 +5428,21 @@ function PrinterCard({
               );
             })()}
 
+            {/* ALVEOLAB Farm: ELEGOO CANVAS from the provider telemetry; its commands only with their capabilities (M5) */}
+            {viewMode === 'expanded' && !printerProvider.isBambu && printerProvider.can(Capability.MULTICOLOR_STATUS) && (
+              <CanvasPanel
+                slots={printerProvider.telemetry?.multicolor_slots}
+                printerId={printer.id}
+                autoRefill={printerProvider.telemetry?.multicolor_auto_refill}
+                jobState={printerProvider.telemetry?.job_state}
+                connected={!!status?.connected}
+                can={printerProvider.can}
+                canControl={hasPermission('printers:control')}
+              />
+            )}
+
             {/* AMS Units - 2-Column Grid Layout */}
-            {(amsData?.length > 0 || status.vt_tray.length > 0) && viewMode === 'expanded' && (() => {
+            {printerProvider.isBambu && (amsData?.length > 0 || status.vt_tray.length > 0) && viewMode === 'expanded' && (() => {
               // Separate regular AMS (4-tray) from HT AMS (1-tray), by unit id
               const regularAms = amsData.filter(ams => !isAmsHtUnit(ams.id));
               const htAms = amsData.filter(ams => isAmsHtUnit(ams.id));
@@ -6853,6 +6907,7 @@ function PrinterCard({
                     Replaces the old Settings > General > Camera switch, which
                     made choosing between an overlay and a window a trip to
                     another page for something you decide per camera. */}
+                {printerProvider.can(Capability.CAMERA) && (
                 <div className="flex items-center flex-shrink-0">
                   <Button
                     variant="secondary"
@@ -6887,6 +6942,7 @@ function PrinterCard({
                   </Button>
                   )}
                 </div>
+                )}
                 {cameraMenuAnchor && !webApp && (
                   <ContextMenu
                     x={cameraMenuAnchor.x}
@@ -6895,6 +6951,7 @@ function PrinterCard({
                     onClose={() => setCameraMenuAnchor(null)}
                   />
                 )}
+                {printerProvider.can(Capability.FILE_LIST) && (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -6905,11 +6962,13 @@ function PrinterCard({
                 >
                   <HardDrive className="w-[var(--pc-i4,1rem)] h-[var(--pc-i4,1rem)]" />
                 </Button>
+                )}
                 {/* Shown whatever the printer is doing (#2849): this uploads a
                     file and queues it, which a busy or offline printer is no
                     reason to refuse -- it only means the item waits. Hiding it
                     while the drop zone accepted the same file would have left
                     the two routes into this flow disagreeing. */}
+                {providerCanDispatch && (
                 <Button
                   size="sm"
                   onClick={() => setShowUploadForPrint(true)}
@@ -6926,6 +6985,7 @@ function PrinterCard({
                   <PrinterIcon className="w-[var(--pc-i4,1rem)] h-[var(--pc-i4,1rem)]" />
                   {t('common.print')}
                 </Button>
+                )}
               </div>
             </div>
         </div>
@@ -7369,6 +7429,8 @@ function PrinterCard({
           onCancel={() => setHaToggleConfirm(null)}
         />
       )}
+
+      {showProviderPrint && <ElegooPrintModal printer={printer} onClose={() => setShowProviderPrint(false)} />}
 
       {/* Stop Print Confirmation */}
       {showStopConfirm && (
@@ -7855,6 +7917,7 @@ export function AddPrinterModal({
   existingSerials: string[];
 }) {
   const { t } = useTranslation();
+  const [provider, setProvider] = useState<PrinterProviderId>('bambu');
   const [form, setForm] = useState<PrinterCreate>({
     name: '',
     serial_number: '',
@@ -8051,6 +8114,18 @@ export function AddPrinterModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  // ALVEOLAB Farm: ELEGOO printers have their own discovery and fields.
+  if (provider === 'elegoo') {
+    return (
+      <ElegooAddPrinterModal
+        onClose={onClose}
+        onAdd={onAdd}
+        onProviderChange={setProvider}
+        existingSerials={existingSerials}
+      />
+    );
+  }
+
   return (
     <>
     <div
@@ -8060,6 +8135,7 @@ export function AddPrinterModal({
       <Card className="w-full max-w-md my-auto max-h-[calc(100vh-2rem)] overflow-y-auto" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
         <CardContent>
           <h2 className="text-xl font-semibold mb-4">{t('printers.addPrinter')}</h2>
+          <ProviderPicker value={provider} onChange={setProvider} disabled={discovering} />
 
           {/* Discovery Section */}
           <div className="mb-4 pb-4 border-b border-bambu-dark-tertiary">
@@ -9032,7 +9108,7 @@ function PowerDropdownItem({
 }
 
 export function PrintersPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { resolvedMode, darkAccent, lightAccent } = useTheme();
   const activeAccent = resolvedMode === 'dark' ? darkAccent : lightAccent;
   const accentButtonClass = {
@@ -9370,7 +9446,10 @@ export function PrintersPage() {
       // Localized message when the backend returns a stable error code;
       // the raw message is an English fallback for non-UI clients.
       if (error instanceof ApiError && error.code === 'printer_connection_failed') {
-        showToast(t('printers.toast.connectionFailedNotAdded'), 'error');
+        // ALVEOLAB Farm: the ELEGOO probe says why (LAN Only off, wrong code, ...).
+        const reason = error.detail?.reason;
+        const reasonKey = typeof reason === 'string' ? `farm.connectError.${reason}` : null;
+        showToast(reasonKey && i18n.exists(reasonKey) ? t(reasonKey) : t('printers.toast.connectionFailedNotAdded'), 'error');
         return;
       }
       showToast(error.message || t('printers.toast.failedToAdd'), 'error');
@@ -9422,7 +9501,15 @@ export function PrintersPage() {
 
   const executeBulkAction = useCallback(async (action: 'stop' | 'pause' | 'resume' | 'clearPlate' | 'clearHMS') => {
     setBulkActionPending(true);
-    const ids = Array.from(selectedPrinterIds);
+    // ALVEOLAB Farm: every bulk action is a Bambu command (or a Bambu queue
+    // gate); printers of other providers are only monitored, so skip them.
+    const bambuIds = new Set((printers ?? []).filter(isBambuPrinter).map(p => p.id));
+    const allIds = Array.from(selectedPrinterIds);
+    const ids = allIds.filter(id => bambuIds.has(id));
+    const skippedOtherProviders = allIds.length - ids.length;
+    if (skippedOtherProviders > 0) {
+      showToast(t('farm.bulkSkipped', { count: skippedOtherProviders }), 'info');
+    }
 
     // Filter to only applicable printers based on cached state
     const applicableIds = ids.filter(id => {
@@ -9476,7 +9563,7 @@ export function PrintersPage() {
 
     setBulkActionPending(false);
     setBulkConfirmAction(null);
-  }, [selectedPrinterIds, queryClient, showToast, t]);
+  }, [selectedPrinterIds, printers, queryClient, showToast, t]);
 
   const handleBulkAction = useCallback((action: 'stop' | 'pause' | 'resume' | 'clearPlate' | 'clearHMS') => {
     // Actions that need confirmation

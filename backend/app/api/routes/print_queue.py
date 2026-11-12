@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
+from backend.app.alveolab import hooks as alveolab_hooks
 from backend.app.api.routes.library_variants import normalize_model_name, resolve_variant_model
 from backend.app.core.auth import (
     ApiKeyActor,
@@ -1243,10 +1244,12 @@ async def add_to_queue(
         ensure_model_target_allowed(current_user, printer_scope)
 
     # Validate printer exists (if assigned)
+    assigned_printer = None
     if data.printer_id is not None:
         printer_scope.ensure(data.printer_id)
         result = await db.execute(select(Printer).where(Printer.id == data.printer_id))
-        if not result.scalar_one_or_none():
+        assigned_printer = result.scalar_one_or_none()
+        if not assigned_printer:
             raise HTTPException(400, "Printer not found")
 
     # Validate target_model has active printers. Skipped for cross-model items:
@@ -1286,6 +1289,15 @@ async def add_to_queue(
             validate_print_filename(library_file.filename)
         except InvalidFilenameError as e:
             raise HTTPException(400, str(e)) from e
+
+    # ALVEOLAB Farm: a provider printer refuses files it cannot print, before they wait in the queue.
+    if assigned_printer is not None and assigned_printer.provider != "bambu":
+        queued_name = library_file.filename if library_file else (archive.filename if archive else None)
+        source = None
+        if library_file is not None:
+            lib_path = Path(library_file.file_path)
+            source = lib_path if lib_path.is_absolute() else settings.base_dir / library_file.file_path
+        await alveolab_hooks.validate_queue_item(assigned_printer, queued_name, source)
 
     # Cross-model safety gate (#2578): a G-code 3MF sliced for one model must
     # not be queued for dispatch to an incompatible model. The UI can no longer
@@ -2955,10 +2967,14 @@ async def stop_queue_item(
     # sees the flag (no spurious "print failed" notification).
     from backend.app.services.print_control import stop_print_by_user
 
-    stop_sent = False
+    # ALVEOLAB Farm: a provider printer answers for itself; one that does not
+    # confirm is not taken as stopped, so the row stays 'printing' (raises).
+    provider_stopped = printer_id is not None and await alveolab_hooks.stop_print(printer_id) is not None
+
+    stop_sent = provider_stopped
     try:
         # A printing job always has a printer; without one there is nothing to stop.
-        if printer_id is not None:
+        if printer_id is not None and not provider_stopped:
             stop_sent = stop_print_by_user(printer_id, mark_when_unsent=True)
         if not stop_sent:
             logger.warning("stop_print returned False for printer %s - printer may not be connected", printer_id)

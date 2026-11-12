@@ -28,6 +28,7 @@ import { CAM_WALL_TILE_SIZES, DEFAULT_CAM_WALL_TILE_SIZE } from '../components/c
 import { type CameraTileStatusMode } from '../components/CameraTile';
 import { savedCamWallControlsMode, saveCamWallControlsMode } from '../components/camWallControls';
 import { api, setStreamToken } from '../api/client';
+import { bambuPrintersOnly } from '../alveolab/printer-providers/capabilities';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthRetrying } from '../components/AuthRetrying';
 import { isStandaloneWebApp } from '../utils/camera';
@@ -134,6 +135,8 @@ export function CamWallPage() {
   const printersQuery = useQuery({
     queryKey: ['printers'],
     queryFn: () => api.getPrinters(),
+    // ALVEOLAB Farm: Bambu-only flow, other providers are not offered here.
+    select: bambuPrintersOnly,
     enabled: !kiosk && !authLoading && (!authEnabled || user !== null),
     refetchInterval: KIOSK_POLL_MS,
   });

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator
@@ -104,14 +105,38 @@ class WLEDConnectionInfo(BaseModel):
     version: str | None = None
 
 
+# Build plate names as Bambu Studio / OrcaSlicer write them in ``curr_bed_type``.
+BED_TYPES = (
+    "Cool Plate",
+    "Engineering Plate",
+    "High Temp Plate",
+    "Textured PEI Plate",
+    "Smooth PEI Plate",
+    "Textured Cool Plate",
+    "Cool Plate (SuperTack)",
+    "Supertack Plate",
+)
+
+
 class PrinterBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     serial_number: str = Field(..., min_length=1, max_length=50)
 
+    # Protocol family (ALVEOLAB Farm). Declared before the validators below
+    # read it; defaults to Bambu so every existing client keeps working.
+    provider: Literal["bambu", "elegoo"] = "bambu"
+
     @field_validator("serial_number")
     @classmethod
-    def _normalize_serial_number(cls, v: str) -> str:
-        """Uppercase and trim the serial number.
+    def _strip_serial_number(cls, v: str) -> str:
+        normalized = v.strip()
+        if not normalized:
+            raise ValueError("serial_number must not be blank")
+        return normalized
+
+    @model_validator(mode="after")
+    def _normalize_serial_number(self):
+        """Uppercase the serial number of a Bambu printer.
 
         Bambu serial numbers are uppercase alphanumeric, and the MQTT report
         topic ``device/<serial>/report`` is case-sensitive. A serial entered
@@ -119,11 +144,14 @@ class PrinterBase(BaseModel):
         without error but never receives a message — the printer publishes to
         the correctly-cased topic, so every status field stays unknown (#1465).
         Normalising on input makes the subscribed topic always match.
+
+        Other providers keep the serial exactly as the printer reports it: the
+        ELEGOO CC2 topics are ``elegoo/<sn>/...`` with the serial from discovery,
+        and nothing says that is always upper-case.
         """
-        normalized = v.strip().upper()
-        if not normalized:
-            raise ValueError("serial_number must not be blank")
-        return normalized
+        if self.provider == "bambu":
+            self.serial_number = self.serial_number.upper()
+        return self
 
     ip_address: str = Field(
         ...,
@@ -145,10 +173,19 @@ class PrinterCreate(PrinterBase):
     # access_code lives on the input shapes only — never on the default
     # PrinterResponse. Direct exposure on PRINTERS_READ would let a Viewer
     # connect to the printer's MQTT and bypass Bambuddy's RBAC.
-    access_code: str = Field(..., min_length=1, max_length=20)
+    # Required for Bambu; optional for an ELEGOO CC2, which only asks for one
+    # when an access code is set on the printer (discovery token_status == 1).
+    access_code: str = Field("", max_length=20)
+
     # Input shape validates the URL; PrinterResponse serialises stored rows
     # with WLEDStoredConfig so one bad stored URL cannot break GET /printers.
     wled_config: WLEDConfig | None = None
+
+    @model_validator(mode="after")
+    def _require_bambu_access_code(self):
+        if self.provider == "bambu" and not self.access_code:
+            raise ValueError("access_code is required for Bambu Lab printers")
+        return self
 
     # Input only, not on PrinterBase: SQLite never enforced the column width,
     # so a stored location may be longer, and the response must still read it.
@@ -190,6 +227,21 @@ class PrinterUpdate(IgnoresNullForRequiredColumns):
     plate_detection_enabled: bool | None = None
     plate_detection_roi: PlateDetectionROI | None = None
     wled_config: WLEDConfig | None = None
+    # Build plate mounted now, as the slicer names it ("Cool Plate"...); null = unknown.
+    bed_type: str | None = Field(default=None, max_length=40)
+
+    @field_validator("bed_type")
+    @classmethod
+    def _known_bed_type(cls, value: str | None) -> str | None:
+        """Only plate names the slicers write in ``curr_bed_type``: a typo here
+        would make every file for this printer fail the plate check."""
+        if value is None:
+            return None
+        canonical = {name.lower(): name for name in BED_TYPES}
+        found = canonical.get(value.strip().lower())
+        if found is None:
+            raise ValueError(f"unknown build plate {value!r}: one of {', '.join(BED_TYPES)}")
+        return found
 
 
 class PrinterResponse(PrinterBase):
@@ -212,6 +264,7 @@ class PrinterResponse(PrinterBase):
     camera_light_auto: bool = False  # #1655
     plate_detection_enabled: bool = False
     plate_detection_roi: PlateDetectionROI | None = None
+    bed_type: str | None = None
     created_at: datetime
     updated_at: datetime
 
