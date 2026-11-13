@@ -70,6 +70,7 @@ separate list under it, not merged into it.
 | 22 | `contexts/ThemeContext.tsx` | `'alveolab'` accent: type, default for dark and light, class list |
 | 23 | `schemas/settings.py` | `dark_accent` / `light_accent` default `alveolab` |
 | 24 | `frontend/index.html`, `public/manifest.json`, `public/img/{favicon*,apple-touch-icon,android-chrome-*}.png` | title, description, theme colour, icons; `alveolab_farm_logo.png` added |
+| 25 | `tests/unit/test_not_null_update_schemas.py` | `NOT_A_ROW_UPDATE` lists our four PUT bodies that are not row updates (`CanvasSlotUpdate`, `CanvasAutoRefill`, `RecipeIn`, `StockSet`) |
 
 ## Not yet moved
 Nothing: every fork change now lives in `alveolab/` or in a hook above.

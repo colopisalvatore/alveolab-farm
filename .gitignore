@@ -109,3 +109,9 @@ test_pipeline_run_1.3mf
 htmlcov/
 
 feature_votes.sh
+
+# PromptOps context snapshot
+.promptops/
+
+# PromptOps session assets
+.promptops-assets/
