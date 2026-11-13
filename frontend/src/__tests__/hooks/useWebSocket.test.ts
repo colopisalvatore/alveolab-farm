@@ -1030,6 +1030,51 @@ describe('useWebSocket hook', () => {
   });
 
   describe('reconnection', () => {
+    it('reconnects a socket that went silent (no message, no pong, no close)', async () => {
+      vi.useFakeTimers();
+      const { useWebSocket } = await import('../../hooks/useWebSocket');
+      renderHook(() => useWebSocket(), { wrapper: createWrapper(queryClient) });
+      await vi.advanceTimersByTimeAsync(0);
+      const first = wsInstances[wsInstances.length - 1]!;
+      act(() => {
+        first.open();
+      });
+      const before = wsInstances.length;
+
+      // Half-open: the server answers the pings with nothing.
+      await vi.advanceTimersByTimeAsync(90000);
+      await vi.advanceTimersByTimeAsync(10);
+
+      expect(first.close).toHaveBeenCalled();
+      expect(wsInstances.length).toBe(before + 1);
+
+      vi.useRealTimers();
+    });
+
+    it('keeps a socket that keeps answering', async () => {
+      vi.useFakeTimers();
+      const { useWebSocket } = await import('../../hooks/useWebSocket');
+      renderHook(() => useWebSocket(), { wrapper: createWrapper(queryClient) });
+      await vi.advanceTimersByTimeAsync(0);
+      const first = wsInstances[wsInstances.length - 1]!;
+      act(() => {
+        first.open();
+      });
+      const before = wsInstances.length;
+
+      for (let i = 0; i < 6; i++) {
+        await vi.advanceTimersByTimeAsync(30000);
+        act(() => {
+          first.onmessage?.(new MessageEvent('message', { data: JSON.stringify({ type: 'pong' }) }));
+        });
+      }
+
+      expect(first.close).not.toHaveBeenCalled();
+      expect(wsInstances.length).toBe(before);
+
+      vi.useRealTimers();
+    });
+
     it('reconnects after connection closes', async () => {
       vi.useFakeTimers();
 

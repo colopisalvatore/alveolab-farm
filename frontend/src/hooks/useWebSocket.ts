@@ -24,6 +24,8 @@ const WS_CLOSE_UNAUTHORIZED = 4401;
 const UNAUTHORIZED_RETRY_FIRST_MS = 3000;
 const UNAUTHORIZED_RETRY_MAX_MS = 300000;
 const HANDSHAKE_RETRY_MAX_MS = 30000;
+// ALVEOLAB Farm: no message (pong included) for this long = dead socket.
+const WS_SILENCE_LIMIT_MS = 75000;
 
 interface WebSocketMessage {
   type: string;
@@ -160,13 +162,34 @@ export function useWebSocket() {
 
     let pingInterval: number | null = null;
     let opened = false;
+    let lastMessageAt = Date.now();
 
     ws.onopen = () => {
       opened = true;
       handshakeDelayRef.current = 0;
       if (import.meta.env.MODE !== 'test') console.log('[WebSocket] Connected');
+      lastMessageAt = Date.now();
       // Start ping interval
       pingInterval = window.setInterval(() => {
+        // ALVEOLAB Farm: a half-open socket (sleep, Wi-Fi change, proxy drop)
+        // never fires close, so the page went mute. Any message counts as
+        // alive; none (not even a pong) for 75 s means dead: drop and reconnect.
+        if (Date.now() - lastMessageAt > WS_SILENCE_LIMIT_MS) {
+          if (pingInterval) {
+            clearInterval(pingInterval);
+            pingInterval = null;
+          }
+          ws.onclose = null;
+          ws.onerror = null;
+          ws.close();
+          wsRef.current = null;
+          if (!disposedRef.current) {
+            reconnectTimeoutRef.current = window.setTimeout(() => {
+              connect();
+            }, 0);
+          }
+          return;
+        }
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'ping' }));
         }
@@ -174,6 +197,7 @@ export function useWebSocket() {
     };
 
     ws.onmessage = (event) => {
+      lastMessageAt = Date.now();
       unauthorizedDelayRef.current = 0;
       try {
         const message: WebSocketMessage = JSON.parse(event.data);
