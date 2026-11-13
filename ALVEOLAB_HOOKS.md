@@ -63,5 +63,8 @@ separate list under it, not merged into it.
 | 16 | `pages/QueuePage.tsx` | `useOutsideQueue(...)`; its count added to the Queue tab and stats; `OutsideQueuePrintCard`s in "Currently printing"; empty state waits for it; `externalBars` passed to the timeline; `<OutsideQueueHistory/>` under `HistorySection` |
 | 17 | `components/QueueTimelineView.tsx` | `externalBars` prop: seeds each lane's chain (`seedExternalChains`), counts in "all done by" and the empty notice, renders `ExternalPrintBar` |
 
+| 18 | `hooks/useWebSocket.ts` | no message (pong included) for 75 s = dead socket: drop it and reconnect (`WS_SILENCE_LIMIT_MS`) |
+| 19 | `api/routes/makerworld.py` | `_map_service_error`: log every provider error; `ProviderUnavailableError` answers 424, not 502 (a Cloudflare tunnel replaces an origin 502 with its own page) |
+
 ## Not yet moved (still on the fork, later modules)
-UI/branding (F), MakerWorld 424 + log (E).
+UI/branding (F).
