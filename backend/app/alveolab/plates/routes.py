@@ -27,7 +27,7 @@ router = APIRouter(prefix="/alveolab/library", tags=["alveolab"])
 @router.post("/build-plate", response_model=BuildPlateResponse)
 async def build_plate_file(
     request: BuildPlateRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User | None = Depends(require_permission_if_auth_enabled(Permission.LIBRARY_UPLOAD)),
 ):
     """Lay plates of project 3MFs out on one new plate, ready to slice.

@@ -53,7 +53,7 @@ OUTSIDE_QUEUE_END_STATUSES = ("completed", "failed", "cancelled", "aborted")
 async def list_outside_queue_prints(
     printer_id: int | None = Query(None, description="Filter by printer"),
     limit: int = Query(100, ge=1, le=500),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     auth_result: tuple[User | None, bool] = Depends(
         require_ownership_permission(
             Permission.ARCHIVES_READ_ALL,

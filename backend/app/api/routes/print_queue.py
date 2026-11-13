@@ -2969,7 +2969,7 @@ async def stop_queue_item(
 
     # ALVEOLAB Farm: a provider printer answers for itself; one that does not
     # confirm is not taken as stopped, so the row stays 'printing' (raises).
-    provider_stopped = printer_id is not None and await alveolab_hooks.stop_print(printer_id) is not None
+    provider_stopped = printer_id is not None and await alveolab_hooks.stop_provider_print(printer_id) is not None
 
     stop_sent = provider_stopped
     try:

@@ -21,7 +21,7 @@ Code: `alveolab/printer_providers/` (base, bambu capabilities, `elegoo/*`), `alv
 | 4 | `schemas/printer.py` | `provider` field, serial case kept for non-Bambu, access code optional for non-Bambu, `bed_type` + `BED_TYPES` |
 | 5 | `services/printer_manager.py` | `_provider_clients`/`_providers` maps; `connect_printer` branches to `_connect_provider_printer`; `disconnect_*`, `get_status`, `get_all_statuses`, `is_connected` also see provider clients; `get_provider`, `get_provider_client`, `get_capabilities`, `set_provider_job_event_callback`. `get_client()` stays Bambu-only on purpose |
 | 6 | `services/print_scheduler.py` | `_start_print` hands provider printers to `alveolab.dispatch.start_print`; idle check / hold use `cannot_take_queue_jobs`; stranded-item sweep reports "outcome not observed"; no AMS spool check or filament-deficit flag for provider printers |
-| 7 | `api/routes/print_queue.py` | `add_to_queue` asks `hooks.validate_queue_item` (3MF refused for Centauri, wrong plate); `stop_queue_item` asks `hooks.stop_print` first |
+| 7 | `api/routes/print_queue.py` | `add_to_queue` asks `hooks.validate_queue_item` (3MF refused for Centauri, wrong plate); `stop_queue_item` asks `hooks.stop_provider_print` first |
 | 8 | `api/routes/printers.py` | `create_printer` probes via `hooks.probe_new_printer`; stop/pause/resume ask the provider first; `/cover` is 404 for non-Bambu |
 
 Frontend code: `frontend/src/alveolab/` (`api.ts` = our client + types, `printer-providers/*` = card parts,

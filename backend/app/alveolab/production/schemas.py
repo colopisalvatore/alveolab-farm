@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from backend.app.schemas.not_null import IgnoresNullForRequiredColumns
+
 
 class RecipeComponent(BaseModel):
     # Short id inside the recipe ("corpo", "sciarpa", "occhi").
@@ -143,7 +145,9 @@ class PlateOut(BaseModel):
         from_attributes = True
 
 
-class PlateUpdate(BaseModel):
+class PlateUpdate(IgnoresNullForRequiredColumns):
+    __orm_table__ = "production_plates"
+
     queue_item_id: int | None = None
     printer_id: int | None = None
     library_file_id: int | None = None

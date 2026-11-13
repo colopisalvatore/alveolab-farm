@@ -39,7 +39,7 @@ async def _get_printer(db: AsyncSession, printer_id: int) -> Printer:
 async def get_printer_capabilities(
     printer_id: int,
     _: User | None = RequirePermissionIfAuthEnabled(Permission.PRINTERS_READ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """What ALVEOLAB Farm can do with this printer, and why the rest is missing."""
     printer = await _get_printer(db, printer_id)
@@ -52,7 +52,7 @@ async def get_printer_capabilities(
 async def get_printer_telemetry(
     printer_id: int,
     _: User | None = RequirePermissionIfAuthEnabled(Permission.PRINTERS_READ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Provider-neutral telemetry snapshot (``NormalizedTelemetry``).
 
@@ -136,7 +136,7 @@ async def set_canvas_slot(
     tray_id: int,
     body: CanvasSlotUpdate,
     _: User | None = RequirePermissionIfAuthEnabled(Permission.PRINTERS_CONTROL),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Declare the spool in a CANVAS slot (method 2003), like the printer's touchscreen."""
     return await _canvas_command(
@@ -157,7 +157,7 @@ async def load_canvas_slot(
     canvas_id: int,
     tray_id: int,
     _: User | None = RequirePermissionIfAuthEnabled(Permission.PRINTERS_CONTROL),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Feed a CANVAS slot's filament to the nozzle (method 2001); waits for the printer, up to 5 minutes."""
     return await _canvas_command(db, printer_id, "load_canvas_filament", canvas_id, tray_id)
@@ -169,7 +169,7 @@ async def unload_canvas_slot(
     canvas_id: int,
     tray_id: int,
     _: User | None = RequirePermissionIfAuthEnabled(Permission.PRINTERS_CONTROL),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Pull a CANVAS slot's filament back from the nozzle (method 2002); waits up to 5 minutes."""
     return await _canvas_command(db, printer_id, "unload_canvas_filament", canvas_id, tray_id)
@@ -180,7 +180,7 @@ async def set_canvas_auto_refill(
     printer_id: int,
     body: CanvasAutoRefill,
     _: User | None = RequirePermissionIfAuthEnabled(Permission.PRINTERS_CONTROL),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Switch CANVAS auto-refill on or off (method 2004)."""
     return await _canvas_command(db, printer_id, "set_canvas_auto_refill", body.enabled)

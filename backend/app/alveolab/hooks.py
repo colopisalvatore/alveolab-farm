@@ -64,7 +64,7 @@ async def provider_job_command(printer_id: int, action: str) -> dict | None:
     raise HTTPException(409, {"message": outcome.message or "Refused", "code": outcome.status})
 
 
-async def stop_print(printer_id: int) -> dict | None:
+async def stop_provider_print(printer_id: int) -> dict | None:
     """Stop on a provider printer, marked as stopped by the user. None for a Bambu."""
     result = await provider_job_command(printer_id, "stop")
     if result is not None:

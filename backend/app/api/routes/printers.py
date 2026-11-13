@@ -1270,7 +1270,7 @@ async def get_printer_cover(
     # ALVEOLAB Farm: the cover comes from the 3MF on a Bambu printer's FTP. A
     # non-Bambu printer has no FTP (the Centauri 2 refuses the connection), so
     # there is nothing to try.
-    if (printer.provider or "bambu") != "bambu":
+    if (getattr(printer, "provider", None) or "bambu") != "bambu":
         raise HTTPException(404, "No cover for this printer")
 
     state = printer_manager.get_status(printer_id)
@@ -3685,7 +3685,7 @@ async def stop_print(
     if not printer:
         raise HTTPException(404, "Printer not found")
 
-    provider_result = await alveolab_hooks.stop_print(printer_id)
+    provider_result = await alveolab_hooks.stop_provider_print(printer_id)
     if provider_result is not None:
         return provider_result
 

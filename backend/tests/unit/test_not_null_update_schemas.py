@@ -31,6 +31,11 @@ NOT_A_ROW_UPDATE = {
     "SpoolTagLinkRequest": "a Spoolman spool, not a database row",
     "SpoolmanFilamentPatch": "a Spoolman filament, not a database row",
     "FilamentProfileDefaultWrite": "replaces a default as a whole; its validator reads a null key field as empty",
+    # ALVEOLAB Farm (alveolab/): none of these updates one row field by field.
+    "CanvasSlotUpdate": "a command to the printer, not a database row",
+    "CanvasAutoRefill": "a command to the printer, not a database row",
+    "RecipeIn": "replaces a recipe and its components as a whole",
+    "StockSet": "sets a stock level, every field required",
 }
 
 

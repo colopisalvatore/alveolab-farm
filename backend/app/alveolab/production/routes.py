@@ -122,7 +122,9 @@ async def _stock_out(db: AsyncSession, recipe_id: int, key: str) -> ProductionSt
 
 
 @router.get("/recipes", response_model=list[RecipeOut])
-async def list_recipes(db: AsyncSession = Depends(get_db), _: User | None = RequirePermissionIfAuthEnabled(READ)):
+async def list_recipes(
+    db: AsyncSession = Depends(get_db, scope="function"), _: User | None = RequirePermissionIfAuthEnabled(READ)
+):
     rows = (
         await db.execute(select(ProductionRecipe).order_by(ProductionRecipe.name, ProductionRecipe.variant))
     ).scalars()
@@ -131,7 +133,9 @@ async def list_recipes(db: AsyncSession = Depends(get_db), _: User | None = Requ
 
 @router.post("/recipes", response_model=RecipeOut)
 async def create_recipe(
-    body: RecipeIn, db: AsyncSession = Depends(get_db), _: User | None = RequirePermissionIfAuthEnabled(WRITE)
+    body: RecipeIn,
+    db: AsyncSession = Depends(get_db, scope="function"),
+    _: User | None = RequirePermissionIfAuthEnabled(WRITE),
 ):
     recipe = ProductionRecipe(**body.model_dump(mode="json"))
     db.add(recipe)
@@ -163,7 +167,7 @@ async def _in_use(db: AsyncSession, recipe_id: int) -> tuple[bool, set[str]]:
 async def replace_recipe(
     recipe_id: int,
     body: RecipeIn,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _: User | None = RequirePermissionIfAuthEnabled(WRITE),
 ):
     recipe = await _recipe(db, recipe_id)
@@ -197,7 +201,9 @@ async def replace_recipe(
 
 @router.delete("/recipes/{recipe_id}")
 async def delete_recipe(
-    recipe_id: int, db: AsyncSession = Depends(get_db), _: User | None = RequirePermissionIfAuthEnabled(WRITE)
+    recipe_id: int,
+    db: AsyncSession = Depends(get_db, scope="function"),
+    _: User | None = RequirePermissionIfAuthEnabled(WRITE),
 ):
     """Refused while something is owed or being printed for it; its stock and old demand go with it
     (explicitly: SQLite here runs without foreign-key enforcement, and reuses the freed id)."""
@@ -216,13 +222,17 @@ async def delete_recipe(
 
 
 @router.get("/stock", response_model=list[StockOut])
-async def list_stock(db: AsyncSession = Depends(get_db), _: User | None = RequirePermissionIfAuthEnabled(READ)):
+async def list_stock(
+    db: AsyncSession = Depends(get_db, scope="function"), _: User | None = RequirePermissionIfAuthEnabled(READ)
+):
     return list((await db.execute(select(ProductionStock).where(ProductionStock.qty != 0))).scalars())
 
 
 @router.put("/stock", response_model=StockOut)
 async def set_stock(
-    body: StockSet, db: AsyncSession = Depends(get_db), _: User | None = RequirePermissionIfAuthEnabled(WRITE)
+    body: StockSet,
+    db: AsyncSession = Depends(get_db, scope="function"),
+    _: User | None = RequirePermissionIfAuthEnabled(WRITE),
 ):
     """Set a count after a stock take (finished products: component_key "")."""
     await _check_component(db, await _recipe(db, body.recipe_id), body.component_key, stock_ok=True)
@@ -238,7 +248,9 @@ async def set_stock(
 
 @router.post("/stock/adjust", response_model=StockOut)
 async def adjust_stock(
-    body: StockAdjust, db: AsyncSession = Depends(get_db), _: User | None = RequirePermissionIfAuthEnabled(WRITE)
+    body: StockAdjust,
+    db: AsyncSession = Depends(get_db, scope="function"),
+    _: User | None = RequirePermissionIfAuthEnabled(WRITE),
 ):
     await _check_component(db, await _recipe(db, body.recipe_id), body.component_key, stock_ok=True)
     await _bump(db, body.recipe_id, body.component_key, body.delta)
@@ -248,7 +260,9 @@ async def adjust_stock(
 
 @router.post("/assemble", response_model=list[StockOut])
 async def assemble(
-    body: AssembleIn, db: AsyncSession = Depends(get_db), _: User | None = RequirePermissionIfAuthEnabled(WRITE)
+    body: AssembleIn,
+    db: AsyncSession = Depends(get_db, scope="function"),
+    _: User | None = RequirePermissionIfAuthEnabled(WRITE),
 ):
     """Loose components become finished products: components go down, finished go up."""
     recipe = await _recipe(db, body.recipe_id)
@@ -285,7 +299,7 @@ async def assemble(
 @router.get("/demand", response_model=list[DemandOut])
 async def list_demand(
     status: str | None = "open",
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _: User | None = RequirePermissionIfAuthEnabled(READ),
 ):
     q = select(ProductionDemand).order_by(ProductionDemand.created_at, ProductionDemand.id)
@@ -306,7 +320,9 @@ async def _demand_by_ref(db: AsyncSession, ref: str) -> ProductionDemand | None:
 
 @router.post("/demand", response_model=DemandOut)
 async def upsert_demand(
-    body: DemandIn, db: AsyncSession = Depends(get_db), _: User | None = RequirePermissionIfAuthEnabled(WRITE)
+    body: DemandIn,
+    db: AsyncSession = Depends(get_db, scope="function"),
+    _: User | None = RequirePermissionIfAuthEnabled(WRITE),
 ):
     """Add owed products. Same ``external_ref`` again = update of that open line, not a new one;
     a line already closed is left as it was."""
@@ -351,7 +367,7 @@ async def upsert_demand(
 async def close_demand(
     demand_id: int,
     body: DemandClose,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _: User | None = RequirePermissionIfAuthEnabled(WRITE),
 ):
     row = (await db.execute(select(ProductionDemand).where(ProductionDemand.id == demand_id))).scalar_one_or_none()
@@ -381,7 +397,7 @@ async def list_plates(
     status: str | None = "prepared",
     library_file_id: int | None = None,
     queue_item_id: int | None = None,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _: User | None = RequirePermissionIfAuthEnabled(READ),
 ):
     q = select(ProductionPlate).order_by(ProductionPlate.id)
@@ -396,7 +412,9 @@ async def list_plates(
 
 @router.post("/plates", response_model=PlateOut)
 async def register_plate(
-    body: PlateIn, db: AsyncSession = Depends(get_db), _: User | None = RequirePermissionIfAuthEnabled(WRITE)
+    body: PlateIn,
+    db: AsyncSession = Depends(get_db, scope="function"),
+    _: User | None = RequirePermissionIfAuthEnabled(WRITE),
 ):
     """A plate prepared for a printer and what it prints: its sets count as coming until printed or failed."""
     for c in body.contents:
@@ -429,7 +447,7 @@ async def _plate(db: AsyncSession, plate_id: int) -> ProductionPlate:
 async def update_plate(
     plate_id: int,
     body: PlateUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _: User | None = RequirePermissionIfAuthEnabled(WRITE),
 ):
     plate = await _plate(db, plate_id)
@@ -452,7 +470,9 @@ async def _close_plate(db: AsyncSession, plate_id: int, status: str) -> bool:
 
 @router.post("/plates/{plate_id}/printed", response_model=PlateOut)
 async def plate_printed(
-    plate_id: int, db: AsyncSession = Depends(get_db), _: User | None = RequirePermissionIfAuthEnabled(WRITE)
+    plate_id: int,
+    db: AsyncSession = Depends(get_db, scope="function"),
+    _: User | None = RequirePermissionIfAuthEnabled(WRITE),
 ):
     """The plate came off the printer good: its sets go into the loose-component stock (once)."""
     plate = await _plate(db, plate_id)
@@ -468,7 +488,9 @@ async def plate_printed(
 
 @router.post("/plates/{plate_id}/failed", response_model=PlateOut)
 async def plate_failed(
-    plate_id: int, db: AsyncSession = Depends(get_db), _: User | None = RequirePermissionIfAuthEnabled(WRITE)
+    plate_id: int,
+    db: AsyncSession = Depends(get_db, scope="function"),
+    _: User | None = RequirePermissionIfAuthEnabled(WRITE),
 ):
     """Failed or cancelled: its sets are owed again."""
     await _plate(db, plate_id)
@@ -481,7 +503,9 @@ async def plate_failed(
 
 
 @router.get("/needs", response_model=NeedsOut)
-async def needs(db: AsyncSession = Depends(get_db), _: User | None = RequirePermissionIfAuthEnabled(READ)):
+async def needs(
+    db: AsyncSession = Depends(get_db, scope="function"), _: User | None = RequirePermissionIfAuthEnabled(READ)
+):
     """What still has to be printed, per colour, after finished and loose stock and prepared plates."""
     recipes = [_recipe_dict(r) for r in (await db.execute(select(ProductionRecipe))).scalars()]
     stock = [
