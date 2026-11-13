@@ -191,14 +191,33 @@ def test_not_a_project_file():
 def test_a_wide_piece_beside_the_exclusion_zone_goes_above_it_instead_of_looping():
     from backend.app.alveolab.plates.builder import Footprint, pack
 
-    wide = Footprint(0, "1", "wide", [1, 0, 0, 0, 1, 0, 0, 0, 1], 240, 20, 5, 0, 0, 0, gap=4)
+    wide = Footprint(0, "1", "wide", [1, 0, 0, 0, 1, 0, 0, 0, 1], 230, 20, 5, 0, 0, 0, gap=4)
     spots = pack([wide], (0, 0, 256, 256), [(0, 0, 18, 28)])
-    assert spots == [(EDGE_MM, 28 + EDGE_MM)]
+    # packed above the zone (10, 38), then moved as a block to the centre of the bed
+    assert spots == [(13.0, 118.0)]
     # Too deep to fit even above the zone: a clean "no", not a hang.
     assert (
         pack([Footprint(0, "1", "big", [1] * 9, 240, 240, 5, 0, 0, 0, gap=4)], (0, 0, 256, 256), [(0, 0, 18, 28)])
         is None
     )
+
+
+def test_a_few_pieces_sit_in_the_centre_of_the_bed_away_from_the_edges():
+    # ALVEOLAB, 13/11/2026: two Ginepro trees (68x74 mm) were packed in the front-left corner, one 1.8 mm from
+    # the front edge, and the print went wrong
+    from backend.app.alveolab.plates.builder import Footprint, pack
+
+    tree = Footprint(0, "1", "tree", [1, 0, 0, 0, 1, 0, 0, 0, 1], 68.4, 74.4, 102, 0, 0, 0, gap=30)
+    spots = pack([tree, tree], (0, 0, 256, 256), [])
+    boxes = [(x, y, x + 68.4, y + 74.4) for x, y in spots]
+    assert min(b[0] for b in boxes) == pytest.approx(256 - max(b[2] for b in boxes))  # centred left-right
+    assert min(b[1] for b in boxes) == pytest.approx(256 - max(b[3] for b in boxes))  # centred front-back
+    assert all(b[0] >= EDGE_MM and b[1] >= EDGE_MM and b[2] <= 256 - EDGE_MM and b[3] <= 256 - EDGE_MM for b in boxes)
+    assert boxes[1][0] - boxes[0][2] == pytest.approx(30)  # the gap between them is kept
+    # an exclusion zone in the way of the centred block: it moves only where it can, else stays as packed
+    blocked = pack([tree, tree], (0, 0, 256, 256), [(100, 100, 156, 156)])
+    assert all(not (x < 156 + EDGE_MM and x + 68.4 > 100 - EDGE_MM and y < 156 + EDGE_MM and y + 74.4 > 100 - EDGE_MM)
+               for x, y in blocked)
 
 
 def test_modifiers_and_negative_volumes_do_not_lift_or_move_the_piece():

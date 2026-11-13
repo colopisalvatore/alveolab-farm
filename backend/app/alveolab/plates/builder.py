@@ -45,8 +45,9 @@ MODEL_RELS_PATH = "3D/_rels/3dmodel.model.rels"
 MODEL_SETTINGS_PATH = "Metadata/model_settings.config"
 PROJECT_SETTINGS_PATH = "Metadata/project_settings.config"
 
-# Distance kept from the edges of the printable area.
-EDGE_MM = 2.0
+# Distance kept from the edges of the printable area. 2 mm put a tree 1.8 mm from the front edge and the print
+# went wrong (ALVEOLAB, 13/11/2026): pieces keep 10 mm from the edges and the layout is centred on the bed.
+EDGE_MM = 10.0
 # Gap between pieces when the caller does not set one. Flat pieces (eyes,
 # buttons, scarves) sit close; taller pieces get room for their brim, which is
 # what the slicer adds around them when brim is on.
@@ -459,7 +460,43 @@ def pack(
         cur_x, prev_gap, row_used = left + p.width, p.gap, True
         row_top = max(row_top, row_y + p.depth)
         row_gap = max(row_gap, p.gap)
-    return out  # type: ignore[return-value]
+    return centre(pieces, out, area, excluded)  # type: ignore[arg-type]
+
+
+def centre(
+    pieces: list[Footprint],
+    spots: list[tuple[float, float]],
+    area: tuple[float, float, float, float],
+    excluded: list[tuple[float, float, float, float]],
+) -> list[tuple[float, float]]:
+    """The packed layout moved as one block to the centre of the bed (both axes, else one, else as packed):
+    the corner the shelves start from is the worst place for a few pieces. A move that would bring a piece
+    within EDGE_MM of the bed edge or of an exclusion zone is not taken."""
+    if not spots:
+        return spots
+    lo_x = min(x for x, _ in spots)
+    lo_y = min(y for _, y in spots)
+    hi_x = max(x + p.width for (x, _), p in zip(spots, pieces))
+    hi_y = max(y + p.depth for (_, y), p in zip(spots, pieces))
+    dx = (area[0] + area[2]) / 2 - (lo_x + hi_x) / 2
+    dy = (area[1] + area[3]) / 2 - (lo_y + hi_y) / 2
+
+    def fits(mx: float, my: float) -> bool:
+        for (x, y), p in zip(spots, pieces):
+            b = (x + mx, y + my, x + mx + p.width, y + my + p.depth)
+            if b[0] < area[0] + EDGE_MM - 1e-6 or b[1] < area[1] + EDGE_MM - 1e-6:
+                return False
+            if b[2] > area[2] - EDGE_MM + 1e-6 or b[3] > area[3] - EDGE_MM + 1e-6:
+                return False
+            if any(b[0] < ex[2] + EDGE_MM and b[2] > ex[0] - EDGE_MM and b[1] < ex[3] + EDGE_MM
+                   and b[3] > ex[1] - EDGE_MM for ex in excluded):
+                return False
+        return True
+
+    for mx, my in ((dx, dy), (dx, 0.0), (0.0, dy)):
+        if fits(mx, my):
+            return [(x + mx, y + my) for x, y in spots]
+    return spots
 
 
 # ---------------------------------------------------------------- writing
