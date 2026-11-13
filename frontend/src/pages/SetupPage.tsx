@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import { useToast } from '../contexts/ToastContext';
-import { useTheme } from '../contexts/ThemeContext';
+import { FARM_LOGO, FARM_NAME } from '../alveolab/brand'; // ALVEOLAB Farm
 import { useAuth } from '../contexts/AuthContext';
 import { Info } from 'lucide-react';
 
@@ -12,7 +12,6 @@ export function SetupPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const { mode } = useTheme();
   const { refreshAuth } = useAuth();
   const [authEnabled, setAuthEnabled] = useState(false);
   const [adminUsername, setAdminUsername] = useState('');
@@ -79,8 +78,8 @@ export function SetupPage() {
         <div className="text-center">
           <div className="flex items-center justify-center mb-6">
             <img
-              src={mode === 'dark' ? '/img/bambuddy_logo_dark_transparent.png' : '/img/bambuddy_logo_light.png'}
-              alt="Bambuddy"
+              src={FARM_LOGO}
+              alt={FARM_NAME}
               className="h-16"
             />
           </div>

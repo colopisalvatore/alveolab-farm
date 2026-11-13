@@ -1,0 +1,21 @@
+/* ALVEOLAB brand: honey yellow #f5b817 / #fdcd00 of the bee logo.
+   Loaded after index.css, so it replaces the default (green) accent. */
+:root {
+  --accent: #f5b817;
+  --accent-light: #fdcd00;
+  --accent-dark: #d99a00;
+}
+
+.accent-alveolab {
+  --accent: #f5b817;
+  --accent-light: #fdcd00;
+  --accent-dark: #d99a00;
+}
+
+/* White text on the yellow accent is unreadable (contrast ~1.9:1). Filled
+   accent surfaces get the brand black instead; outline/text uses of the
+   accent are unaffected. */
+.accent-alveolab :is(.bg-bambu-green, .bg-bambu-green-dark, .bg-bambu-green-light).text-white,
+.accent-alveolab :is(.bg-bambu-green, .bg-bambu-green-dark, .bg-bambu-green-light) > .text-white {
+  color: #111111;
+}

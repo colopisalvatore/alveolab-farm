@@ -65,6 +65,11 @@ separate list under it, not merged into it.
 
 | 18 | `hooks/useWebSocket.ts` | no message (pong included) for 75 s = dead socket: drop it and reconnect (`WS_SILENCE_LIMIT_MS`) |
 | 19 | `api/routes/makerworld.py` | `_map_service_error`: log every provider error; `ProviderUnavailableError` answers 424, not 502 (a Cloudflare tunnel replaces an origin 502 with its own page) |
+| 20 | `main.tsx` | imports `alveolab/brand.css` after `index.css` (honey-yellow default accent, `.accent-alveolab`, dark text on filled accent) |
+| 21 | `components/Layout.tsx`, `pages/LoginPage.tsx`, `pages/SetupPage.tsx` | logo and name from `alveolab/brand.ts` (one logo for light and dark) |
+| 22 | `contexts/ThemeContext.tsx` | `'alveolab'` accent: type, default for dark and light, class list |
+| 23 | `schemas/settings.py` | `dark_accent` / `light_accent` default `alveolab` |
+| 24 | `frontend/index.html`, `public/manifest.json`, `public/img/{favicon*,apple-touch-icon,android-chrome-*}.png` | title, description, theme colour, icons; `alveolab_farm_logo.png` added |
 
-## Not yet moved (still on the fork, later modules)
-UI/branding (F).
+## Not yet moved
+Nothing: every fork change now lives in `alveolab/` or in a hook above.

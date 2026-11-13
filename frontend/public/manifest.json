@@ -1,12 +1,12 @@
 {
   "id": "/",
-  "name": "Bambuddy",
-  "short_name": "Bambuddy",
-  "description": "Monitor and manage your Bambu Lab 3D printers",
+  "name": "ALVEOLAB Farm",
+  "short_name": "ALVEOLAB",
+  "description": "ALVEOLAB Farm — 3D print farm management (based on Bambuddy)",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1a1a",
-  "theme_color": "#00ae42",
+  "theme_color": "#f5b817",
   "orientation": "any",
   "scope": "/",
   "icons": [
