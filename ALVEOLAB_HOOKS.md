@@ -69,7 +69,7 @@ separate list under it, not merged into it.
 | 21 | `components/Layout.tsx`, `pages/LoginPage.tsx`, `pages/SetupPage.tsx` | logo and name from `alveolab/brand.ts` (one logo for light and dark) |
 | 22 | `contexts/ThemeContext.tsx` | `'alveolab'` accent: type, default for dark and light, class list |
 | 23 | `schemas/settings.py` | `dark_accent` / `light_accent` default `alveolab` |
-| 24 | `frontend/index.html`, `public/manifest.json`, `public/img/{favicon*,apple-touch-icon,android-chrome-*}.png` | title, description, theme colour, icons; `alveolab_farm_logo.png` added |
+| 24 | `frontend/index.html`, `public/manifest.json`, `public/img/{favicon*,apple-touch-icon,android-chrome-*}.png` | title, description, theme colour, icons; `alveolab_farm_logo.png` added; since 1.3.2 the maskable entries point at our `android-chrome-*` instead of upstream `maskable-*` |
 | 25 | `tests/unit/test_not_null_update_schemas.py` | `NOT_A_ROW_UPDATE` lists our four PUT bodies that are not row updates (`CanvasSlotUpdate`, `CanvasAutoRefill`, `RecipeIn`, `StockSet`) |
 
 ## Not yet moved

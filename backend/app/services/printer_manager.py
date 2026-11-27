@@ -3,7 +3,8 @@ import logging
 import math
 import re
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1076,6 +1077,22 @@ class PrinterManager:
         to send Bambu MQTT commands. See ``get_provider_client``.
         """
         return self._clients.get(printer_id)
+
+    @contextmanager
+    def uploading(self, printer_id: int | None) -> Iterator[None]:
+        """Bambuddy is uploading to this printer: its MQTT silence is expected (#3538).
+
+        Ends on the client it began on, so a client replaced meanwhile is
+        neither left counting nor decremented.
+        """
+        client = self._clients.get(printer_id) if printer_id is not None else None
+        if client is not None:
+            client.begin_upload()
+        try:
+            yield
+        finally:
+            if client is not None:
+                client.end_upload()
 
     def mark_printer_offline(self, printer_id: int):
         """Mark a printer as offline and trigger status callback.

@@ -4946,7 +4946,8 @@ class TestSetFanSpeedAPI:
             ("X2D", "Exhaust fan"),
             ("X1C", "Chamber fan"),
             ("P1S", "Chamber fan"),
-            ("H2D", "Chamber fan"),
+            ("H2D", "Exhaust fan"),
+            ("H3C", "Exhaust fan"),
         ],
     )
     async def test_chamber_fan_message_matches_model_label(
